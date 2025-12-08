@@ -1,0 +1,57 @@
+"""
+Robust locomotion for uneven terrain.
+"""
+
+from isaaclab.utils import configclass
+from isaaclab import sim as sim_utils
+from isaaclab.terrains import TerrainImporterCfg
+from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG
+
+from .rob6323_go2_env_cfg import Rob6323Go2EnvCfg
+
+@configclass
+class Rob6323Go2UnevenEnvCfg(Rob6323Go2EnvCfg):
+    """
+    Configurations
+    """
+
+    # widen the observation vector with terrain descriptors
+    observation_space = Rob6323Go2EnvCfg.observation_space + 3
+
+    # denser contact visualization for debugging during terrain adaptation
+    current_vel_visualizer_cfg = BLUE_ARROW_X_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/velocity_current"
+    )
+    current_vel_visualizer_cfg.markers["arrow"].scale = (0.35, 0.35, 0.35)
+
+    # switch to a randomized heightfield with strong friction
+    terrain = TerrainImporterCfg(
+        prim_path="/World/ground",
+        terrain_type="heightfield",
+        collision_group=-1,
+        physics_material=sim_utils.RigidBodyMaterialCfg(
+            friction_combine_mode="multiply",
+            restitution_combine_mode="multiply",
+            static_friction=1.1,
+            dynamic_friction=1.0,
+            restitution=0.0,
+        ),
+        debug_vis=False,
+    )
+
+    # fewer environments but more spacing for tall obstacles
+    scene = Rob6323Go2EnvCfg.scene.replace(num_envs=1024, env_spacing=6.0)
+
+    # reward shaping
+    stability_reward_scale: float = 0.5
+    contact_consistency_reward_scale: float = 0.3
+
+    # observation hints sampled at reset
+    slope_range = (-0.25, 0.25)
+    step_height_range = (0.03, 0.18)
+    friction_range = (0.6, 1.2)
+
+    # stability shaping
+    orientation_stability_sigma: float = 0.6
+    contact_variance_sigma: float = 45.0
+

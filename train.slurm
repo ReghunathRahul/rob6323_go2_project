@@ -76,7 +76,9 @@ export APPTAINER_CACHEDIR="${NODE_TMP}/apptainer-cache"
 
 # Forward all user args to eval.py
 export ISAAC_ARGS="$*"
-echo "$ISAAC_ARGS"
+: "${TASK_NAME:=Template-Rob6323-Go2-Direct-v0}"
+echo "ISAAC_ARGS=${ISAAC_ARGS}"
+echo "TASK_NAME=${TASK_NAME}"
 
 # WandB
 export WANDB_PROJECT=$PROJECT_NAME
@@ -120,8 +122,9 @@ export ISAACLAB_PATH=/workspace/isaaclab
 /isaac-sim/python.sh -m pip install -e /workspace/run/source/rob6323_go2
 
 /isaac-sim/python.sh /workspace/run/scripts/rsl_rl/train.py \
-  --task=Template-Rob6323-Go2-Direct-v0 \
-  --headless
+  --task="${TASK_NAME}" \
+  --headless \
+  ${ISAAC_ARGS}
 
 # Identify the latest-created/modified subdirectory under go2_flat_direct
 LATEST_DIR=$(ls -td /workspace/isaaclab/logs/rsl_rl/go2_flat_direct/*/ 2>/dev/null | head -n 1 || true)
@@ -133,11 +136,12 @@ LATEST_DIR="${LATEST_DIR%/}"
 
 # Run evaluation with the discovered checkpoint
 /isaac-sim/python.sh /workspace/run/scripts/rsl_rl/play.py \
-  --task=Template-Rob6323-Go2-Direct-v0 \
+  --task="${TASK_NAME}" \
   --checkpoint "${LATEST_DIR}/model_499.pt" \
   --video \
   --video_length 1000 \
-  --headless
+  --headless \
+  ${ISAAC_ARGS}
 
 # WandB sync, TODO: we could use the built in WandB logger option
 /isaac-sim/python.sh -m wandb sync \

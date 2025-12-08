@@ -165,3 +165,8 @@ The suggested way to inspect these logs is via the Open OnDemand web interface:
 
 ---
 Students should only edit README.md below this line.
+
+### Task-specfic training
+```bash
+TASK_NAME=Template-Rob6323-Go2-<RobustWalk|Direct>-v0 ./train.sh --experiment_name go2_<task> --max_iterations 10000
+```
