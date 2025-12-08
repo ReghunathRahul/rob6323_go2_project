@@ -190,10 +190,26 @@ class Rob6323Go2Env(DirectRLEnv):
         # yaw rate tracking
         yaw_rate_error = torch.square(self._commands[:, 2] - self.robot.data.root_ang_vel_b[:, 2])
         yaw_rate_error_mapped = torch.exp(-yaw_rate_error / 0.25)
-        
+
+        # penalize non-vertical orientation (projected gravity on XY plane)
+        rew_orient = torch.sum(torch.square(self.robot.data.projected_gravity_b[:, :2]), dim=1)
+
+        # penalize vertical velocity (z-component of base linear velocity)
+        rew_lin_vel_z = torch.square(self.robot.data.root_lin_vel_b[:, 2])
+
+        # penalize high joint velocities
+        rew_dof_vel = torch.sum(torch.square(self.robot.data.joint_vel), dim=1)
+
+        # penalize angular velocity in XY plane (roll/pitch)
+        rew_ang_vel_xy = torch.sum(torch.square(self.robot.data.root_ang_vel_b[:, :2]), dim=1)
+
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
             "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
+            "rew_orient": rew_orient * self.cfg.orient_reward_scale * self.step_dt,
+            "rew_lin_vel_z": rew_lin_vel_z * self.cfg.lin_vel_z_reward_scale * self.step_dt,
+            "rew_dof_vel": rew_dof_vel * self.cfg.dof_vel_reward_scale * self.step_dt,
+            "rew_ang_vel_xy": rew_ang_vel_xy * self.cfg.ang_vel_xy_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
