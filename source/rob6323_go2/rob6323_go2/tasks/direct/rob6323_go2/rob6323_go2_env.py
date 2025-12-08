@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import gymnasium as gym
 import math
+import numpy as np
 import torch
 from collections.abc import Sequence
 
@@ -51,6 +52,18 @@ class Rob6323Go2Env(DirectRLEnv):
         # self._feet_ids, _ = self._contact_sensor.find_bodies(".*foot")
         # self._undesired_contact_body_ids, _ = self._contact_sensor.find_bodies(".*thigh")
 
+        # controller parameters and actuator friction
+        #   torque = Kp * position_error - Kd * velocity - friction_torque
+        self.Kp = torch.full((self.num_envs, gym.spaces.flatdim(self.single_action_space)),
+                             self.cfg.Kp,
+                             device=self.device)
+        self.Kd = torch.full((self.num_envs, gym.spaces.flatdim(self.single_action_space)),
+                             self.cfg.Kd,
+                             device=self.device)
+        self.torque_limits = self.cfg.torque_limits
+        self._stiction_coef = torch.zeros(self.num_envs, 1, device=self.device)
+        self._viscous_coef = torch.zeros(self.num_envs, 1, device=self.device)
+
         # add handle for debug visualization (this is set to a valid handle inside set_debug_vis)
         self.set_debug_vis(self.cfg.debug_vis)
 
@@ -77,7 +90,21 @@ class Rob6323Go2Env(DirectRLEnv):
         self._processed_actions = self.cfg.action_scale * self._actions + self.robot.data.default_joint_pos
 
     def _apply_action(self) -> None:
-        self.robot.set_joint_position_target(self._processed_actions)
+        # PD control: torque = Kp * position_error - Kd * velocity
+        pd_torques = (
+            self.Kp * (self.desired_joint_pos - self.robot.data.joint_pos)
+            - self.Kd * self.robot.data.joint_vel
+        )
+        # friction model: friction_torque = stiction + viscous
+        friction_torque = (
+            self._stiction_coef * torch.tanh(self.robot.data.joint_vel / 0.1)
+            + self._viscous_coef * self.robot.data.joint_vel
+        )
+        torques = torch.clamp(
+            pd_torques - friction_torque,
+            -self.torque_limits, self.torque_limits
+        )
+        self.robot.set_joint_effort_target(torques)
 
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
@@ -138,6 +165,19 @@ class Rob6323Go2Env(DirectRLEnv):
         self._previous_actions[env_ids] = 0.0
         # Sample new commands
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids]).uniform_(-1.0, 1.0)
+
+        # randomize actuator friction parameters
+        self._viscous_coef[env_ids] = (
+            torch.rand((len(env_ids), 1), device=self.device)
+            * (self.cfg.viscous_friction_range[1] - self.cfg.viscous_friction_range[0])
+            + self.cfg.viscous_friction_range[0]
+        ) # viscous friction
+        self._stiction_coef[env_ids] = (
+            torch.rand((len(env_ids), 1), device=self.device)
+            * (self.cfg.stiction_friction_range[1] - self.cfg.stiction_friction_range[0])
+            + self.cfg.stiction_friction_range[0]
+        ) # stiction friction
+         
         # Reset robot state
         joint_pos = self.robot.data.default_joint_pos[env_ids]
         joint_vel = self.robot.data.default_joint_vel[env_ids]
