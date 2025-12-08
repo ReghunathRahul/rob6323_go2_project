@@ -79,7 +79,9 @@ export ISAAC_ARGS="$*"
 echo "$ISAAC_ARGS"
 
 # WandB
+export WANDB_PROJECT=$PROJECT_NAME
 export WANDB_API_KEY="$(cat "${REMOTE_CONFIG}/wandb/.key" 2>/dev/null || true)"
+export WANDB_RUN_NAME="exp_${SLURM_JOB_ID}"
 
 # Execute with GPU and required binds
 CMD="--nv --containall \
@@ -99,7 +101,9 @@ CMD="--nv --containall \
   -B ${RUN_DIR}:/workspace/run:rw \
   --env WANDB_CACHE_DIR=${DOCKER_USER_HOME}/.cache/wandb \
   --env WANDB_CONFIG_DIR=${DOCKER_USER_HOME}/.config/wandb \
-  --env WANDB_API_KEY=$WANDB_API_KEY"
+  --env WANDB_API_KEY=$WANDB_API_KEY \
+  --env WANDB_PROJECT=$WANDB_PROJECT \
+  --env WANDB_RUN_NAME=$WANDB_RUN_NAME"
 
 echo "CMD to run: $CMD"
 
