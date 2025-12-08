@@ -99,3 +99,6 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     viscous_friction_range = (0.0, 0.3)
     stiction_friction_range = (0.0, 2.5)
     stiction_vel_tol = 0.1
+
+    # termination
+    base_height_min = 0.20
