@@ -66,6 +66,7 @@ _build
 
 # Tests
 tests/
+!source/rob6323_go2/tests/
 
 # Docker history
 .isaac-lab-docker-history
