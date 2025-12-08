@@ -46,7 +46,13 @@ class Rob6323Go2Env(DirectRLEnv):
                 "track_lin_vel_xy_exp",
                 "track_ang_vel_z_exp",
                 "rew_action_rate",
-                "raibert_heuristic"
+                "rew_raibert_heuristic",
+                "rew_orient",
+                "rew_lin_vel_z",
+                "rew_dof_vel",
+                "rew_ang_vel_xy",
+                "rew_swing_clearance",
+                "rew_stance_contact",
             ]
         }
 
@@ -60,12 +66,11 @@ class Rob6323Go2Env(DirectRLEnv):
             requires_grad=False,
         )
         # Get specific body indices
-        self._base_id, _ = self._contact_sensor.find_bodies("base")
-        self.feet_ids = []
         foot_names = ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]
-        for name in foot_names:
-            id_list, _ = self.robot.find_bodies(name)
-            self._feet_ids.append(id_list[0])
+        self._base_id, _ = self._contact_sensor.find_bodies("base")
+        self.feet_ids, self._feet_ids_sensor = [], []
+        self._feet_ids = [self.robot.find_bodies(name)[0][0] for name in foot_names]
+        self._feet_ids_sensor = [self._contact_sensor.find_bodies(name)[0][0] for name in foot_names]
 
         # raibert heuristic variables
         self.gait_indices = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)
@@ -176,13 +181,21 @@ class Rob6323Go2Env(DirectRLEnv):
         self._step_contact_targets()
         rew_raibert_heuristic = self._reward_raibert_heuristic()
 
-        # add rewards
-        rewards = {
-            "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale,
-            "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale,
-            "rew_action_rate": rew_action_rate * self.cfg.action_rate_reward_scale,
-            "rew_raibert_heuristic": rew_raibert_heuristic * self.cfg.raibert_heuristic_reward_scale,   # negative penality in config
-        }
+        # locomotion logic
+        gait_phase = self.foot_indices # % self.cfg.raibert_heuristic.gait_period
+        foot_height = self.foot_positions_w[:, 2]
+        contact_forces = self._contact_sensor.data.net_forces_w[:, self._feet_ids_sensor]
+        
+        # swing feet being off ground
+        swing_mask = gait_phase > 0.5
+        swing_foot_height = foot_height[swing_mask]
+        rew_swing_clearance = torch.mean(swing_foot_height) if swing_foot_height.numel() > 0 else 0.0
+
+        # stance with good contact
+        stance_mask = ~swing_mask
+        stance_contact_force = contact_forces[stance_mask]
+        rew_stance_contact = torch.mean(stance_contact_force) if stance_contact_force.numel > 0 else 0.0
+	# rew_stance_contact = self._tracking_contacts_reward(contact_forces)
 
         # linear velocity tracking
         lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self.robot.data.root_lin_vel_b[:, :2]), dim=1)
@@ -203,13 +216,18 @@ class Rob6323Go2Env(DirectRLEnv):
         # penalize angular velocity in XY plane (roll/pitch)
         rew_ang_vel_xy = torch.sum(torch.square(self.robot.data.root_ang_vel_b[:, :2]), dim=1)
 
+        # add rewards
         rewards = {
-            "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
-            "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
-            "rew_orient": rew_orient * self.cfg.orient_reward_scale * self.step_dt,
-            "rew_lin_vel_z": rew_lin_vel_z * self.cfg.lin_vel_z_reward_scale * self.step_dt,
-            "rew_dof_vel": rew_dof_vel * self.cfg.dof_vel_reward_scale * self.step_dt,
-            "rew_ang_vel_xy": rew_ang_vel_xy * self.cfg.ang_vel_xy_reward_scale * self.step_dt,
+            "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale,
+            "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale,
+            "rew_action_rate": rew_action_rate * self.cfg.action_rate_reward_scale,
+            "rew_raibert_heuristic": rew_raibert_heuristic * self.cfg.raibert_heuristic_reward_scale,   # negative penality in config
+            "rew_orient": rew_orient * self.cfg.orient_reward_scale,
+            "rew_lin_vel_z": rew_lin_vel_z * self.cfg.lin_vel_z_reward_scale,
+            "rew_dof_vel": rew_dof_vel * self.cfg.dof_vel_reward_scale,
+            "rew_ang_vel_xy": rew_ang_vel_xy * self.cfg.ang_vel_xy_reward_scale,
+            "rew_swing_clearance": rew_swing_clearance * self.cfg.swing_clearance_reward_scale,
+            "rew_stance_contact": rew_stance_contact * self.cfg.stance_contact_reward_scale,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -242,6 +260,10 @@ class Rob6323Go2Env(DirectRLEnv):
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
         self._actions[env_ids] = 0.0
         self._previous_actions[env_ids] = 0.0
+        self.last_actions[env_ids] = 0.0
+        self.gait_indices[env_ids] = 0.0
+        self.clock_inputs[env_ids] = 0.0
+        self.desired_contact_states[env_ids] = 0.0
         # Sample new commands
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids]).uniform_(-1.0, 1.0)
 
@@ -449,6 +471,16 @@ class Rob6323Go2Env(DirectRLEnv):
         reward = torch.sum(torch.square(err_raibert_heuristic), dim=(1, 2))
 
         return reward
+
+    def _tracking_contacts_reward(self, contact_forces: torch.Tensor) -> torch.Tensor:
+        """
+	Rewards matching desired contact schedule by comparing force magnitudes.
+	"""
+
+        force_target = 100.0
+        normalized_force = torch.clamp(contact_forces / force_target, max=2.0)
+        contact_error = torch.square(normalized_force - self.desired_contact_states)
+        return -torch.sum(contact_error, dim=1)
 
     @property
     def foot_positions_w(self,

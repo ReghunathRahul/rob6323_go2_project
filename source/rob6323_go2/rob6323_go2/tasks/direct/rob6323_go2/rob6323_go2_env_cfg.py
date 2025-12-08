@@ -95,11 +95,18 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     feet_clarety_reward_scale = -30.0
     tracking_contacts_shaped_force_reward_scale = 4.0
 
+    swing_clearance_reward_scale = 0.1
+    stance_contact_reward_scale = 0.1
+
     # for natural gait
     orient_reward_scale = -5.0
     lin_vel_z_reward_scale = -0.02
     dof_vel_reward_scale = -0.0001
     ang_vel_xy_reward_scale = -0.001
+
+    # foot interactions
+    foot_clearance_reward_scale = -30.0
+    tracking_contacts_shaped_force_reward_scale = 4.0
 
     # PD controller
     Kp = 20.0
