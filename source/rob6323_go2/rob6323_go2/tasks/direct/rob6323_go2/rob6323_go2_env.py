@@ -97,7 +97,7 @@ class Rob6323Go2Env(DirectRLEnv):
         )
         # friction model: friction_torque = stiction + viscous
         friction_torque = (
-            self._stiction_coef * torch.tanh(self.robot.data.joint_vel / 0.1)
+            self._stiction_coef * torch.tanh(self.robot.data.joint_vel / self.cfg.stiction_vel_tol)
             + self._viscous_coef * self.robot.data.joint_vel
         )
         torques = torch.clamp(
@@ -167,17 +167,8 @@ class Rob6323Go2Env(DirectRLEnv):
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids]).uniform_(-1.0, 1.0)
 
         # randomize actuator friction parameters
-        self._viscous_coef[env_ids] = (
-            torch.rand((len(env_ids), 1), device=self.device)
-            * (self.cfg.viscous_friction_range[1] - self.cfg.viscous_friction_range[0])
-            + self.cfg.viscous_friction_range[0]
-        ) # viscous friction
-        self._stiction_coef[env_ids] = (
-            torch.rand((len(env_ids), 1), device=self.device)
-            * (self.cfg.stiction_friction_range[1] - self.cfg.stiction_friction_range[0])
-            + self.cfg.stiction_friction_range[0]
-        ) # stiction friction
-         
+        self.sample_friction(env_ids)
+
         # Reset robot state
         joint_pos = self.robot.data.default_joint_pos[env_ids]
         joint_vel = self.robot.data.default_joint_vel[env_ids]
@@ -198,6 +189,33 @@ class Rob6323Go2Env(DirectRLEnv):
         extras["Episode_Termination/base_contact"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
         self.extras["log"].update(extras)
+
+    def sample_friction(self, env_ids: Sequence[int]
+    ) -> None:
+        """
+        Samples per-episode actuator friction parameters
+        """
+        if env_ids is None or len(env_ids) == 0:
+            return
+        
+        num_indices = len(env_ids)
+        shape = (num_indices, self._action_dim)
+        viscous_low, viscous_high = self.cfg.viscous_friction_range
+        stiction_low, stiction_high = self.cfg.stiction_friction_range
+
+        # viscous friction
+        self._viscous_coef[env_ids] = (
+            torch.rand(shape, device=self.device)
+            * (viscous_high - viscous_low)
+            + viscous_low
+        )
+        # stiction friction
+        self._stiction_coef[env_ids] = (
+            torch.rand(shape, device=self.device)
+            * (stiction_high - stiction_low)
+            + stiction_low
+        )
+
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         # set visibility of markers

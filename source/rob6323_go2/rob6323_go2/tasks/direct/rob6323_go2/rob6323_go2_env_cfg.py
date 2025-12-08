@@ -95,3 +95,4 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # actuator friction randomization
     viscous_friction_range = (0.0, 0.3)
     stiction_friction_range = (0.0, 2.5)
+    stiction_vel_tol = 0.1
