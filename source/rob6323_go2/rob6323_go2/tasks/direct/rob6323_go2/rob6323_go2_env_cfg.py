@@ -17,6 +17,8 @@ from isaaclab.sensors import ContactSensorCfg
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 
+from isaaclab.actuators import ImplicitActuatorCfg
+
 @configclass
 class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # env

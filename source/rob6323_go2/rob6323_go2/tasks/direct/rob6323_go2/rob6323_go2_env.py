@@ -72,6 +72,7 @@ class Rob6323Go2Env(DirectRLEnv):
         self.Kd = torch.full((self.num_envs, gym.spaces.flatdim(self.single_action_space)),
                              self.cfg.Kd,
                              device=self.device)
+        self.motor_offsets = torch.zeros(self.num_envs, 12, device=self.device)
         self.torque_limits = self.cfg.torque_limits
         self._stiction_coef = torch.zeros(self.num_envs, 1, device=self.device)
         self._viscous_coef = torch.zeros(self.num_envs, 1, device=self.device)
@@ -98,8 +99,14 @@ class Rob6323Go2Env(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
+        """
+        \tau = Kp * (q_des - q) - Kd * qd - friction_torque
+        """
         self._actions = actions.clone()
-        self._processed_actions = self.cfg.action_scale * self._actions + self.robot.data.default_joint_pos
+        self.desired_joint_pos = (
+            self.cfg.action_scale * self._actions
+            + self.robot.data.default_joint_pos
+        )
 
     def _apply_action(self) -> None:
         # PD control: torque = Kp * position_error - Kd * velocity
@@ -114,7 +121,8 @@ class Rob6323Go2Env(DirectRLEnv):
         )
         torques = torch.clamp(
             pd_torques - friction_torque,
-            -self.torque_limits, self.torque_limits
+            -self.torque_limits, 
+            self.torque_limits
         )
         self.robot.set_joint_effort_target(torques)
 
