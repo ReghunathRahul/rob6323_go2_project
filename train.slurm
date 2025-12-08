@@ -76,7 +76,7 @@ export APPTAINER_CACHEDIR="${NODE_TMP}/apptainer-cache"
 
 # Forward all user args to eval.py
 export ISAAC_ARGS="$*"
-: "${TASK_NAME:=Template-Rob6323-Go2-Direct-v0}"
+TASK_NAME="${TASK_NAME:-Template-Rob6323-Go2-Direct-v0}"
 echo "ISAAC_ARGS=${ISAAC_ARGS}"
 echo "TASK_NAME=${TASK_NAME}"
 
@@ -105,7 +105,8 @@ CMD="--nv --containall \
   --env WANDB_CONFIG_DIR=${DOCKER_USER_HOME}/.config/wandb \
   --env WANDB_API_KEY=$WANDB_API_KEY \
   --env WANDB_PROJECT=$WANDB_PROJECT \
-  --env WANDB_RUN_NAME=$WANDB_RUN_NAME"
+  --env WANDB_RUN_NAME=$WANDB_RUN_NAME \
+  --env TASK_NAME=$TASK_NAME"
 
 echo "CMD to run: $CMD"
 
