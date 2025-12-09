@@ -32,6 +32,7 @@ class Rob6323Go2Env(DirectRLEnv):
 
         # Joint position command (deviation from default joint positions)
         self._actions = torch.zeros(self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device)
+        self._action_dim = gym.spaces.flatdim(self.single_action_space)
         self._previous_actions = torch.zeros(
             self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device
         )
@@ -90,8 +91,8 @@ class Rob6323Go2Env(DirectRLEnv):
                              device=self.device)
         self.motor_offsets = torch.zeros(self.num_envs, 12, device=self.device)
         self.torque_limits = self.cfg.torque_limits
-        self._stiction_coef = torch.zeros(self.num_envs, 1, device=self.device)
-        self._viscous_coef = torch.zeros(self.num_envs, 1, device=self.device)
+        self._stiction_coef = torch.zeros(self.num_envs, self._action_dim, device=self.device)
+        self._viscous_coef = torch.zeros(self.num_envs, self._action_dim, device=self.device)
 
         # add handle for debug visualization (this is set to a valid handle inside set_debug_vis)
         self.set_debug_vis(self.cfg.debug_vis)
@@ -183,19 +184,24 @@ class Rob6323Go2Env(DirectRLEnv):
 
         # locomotion logic
         gait_phase = self.foot_indices # % self.cfg.raibert_heuristic.gait_period
-        foot_height = self.foot_positions_w[:, 2]
+        foot_height = self.foot_positions_w[..., 2]
         contact_forces = self._contact_sensor.data.net_forces_w[:, self._feet_ids_sensor]
         
         # swing feet being off ground
         swing_mask = gait_phase > 0.5
-        swing_foot_height = foot_height[swing_mask]
-        rew_swing_clearance = torch.mean(swing_foot_height) if swing_foot_height.numel() > 0 else 0.0
+        swing_foot_height = torch.zeros_like(foot_height)
+        swing_foot_height[swing_mask] = foot_height[swing_mask]
+        swing_counts = swing_mask.sum(dim=1).clamp(min=1)
+        rew_swing_clearance = swing_foot_height.sum(dim=1) / swing_counts
 
         # stance with good contact
         stance_mask = ~swing_mask
-        stance_contact_force = contact_forces[stance_mask]
-        rew_stance_contact = torch.mean(stance_contact_force) if stance_contact_force.numel > 0 else 0.0
-	# rew_stance_contact = self._tracking_contacts_reward(contact_forces)
+        stance_contact_force = torch.zeros_like(foot_height)
+        contact_force_norm = contact_forces.norm(dim=-1)
+        stance_contact_force[stance_mask] = contact_force_norm[stance_mask]
+        stance_counts = stance_mask.sum(dim=1).clamp(min=1)
+        rew_stance_contact = stance_contact_force.sum(dim=1) /stance_counts
+	    # rew_stance_contact = self._tracking_contacts_reward(contact_forces)
 
         # linear velocity tracking
         lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self.robot.data.root_lin_vel_b[:, :2]), dim=1)
@@ -268,7 +274,7 @@ class Rob6323Go2Env(DirectRLEnv):
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids]).uniform_(-1.0, 1.0)
 
         # randomize actuator friction parameters
-        self.sample_friction(env_ids)
+        self._sample_friction(env_ids)
 
         # reset last actions hist
         self.last_actions[env_ids] = 0.0
@@ -297,7 +303,7 @@ class Rob6323Go2Env(DirectRLEnv):
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
         self.extras["log"].update(extras)
 
-    def sample_friction(self, env_ids: Sequence[int]
+    def _sample_friction(self, env_ids: Sequence[int]
     ) -> None:
         """
         Samples per-episode actuator friction parameters

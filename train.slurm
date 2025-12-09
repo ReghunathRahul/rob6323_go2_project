@@ -70,13 +70,19 @@ mkdir -p \
 mkdir -p "${PERSISTENT_LOGS_DIR}"
 touch "${PERSISTENT_LOGS_DIR}/.keep"
 
+LOG_CSV="${PERSISTENT_LOGS_DIR}/runs.csv"
+RUN_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
+echo "${SLURM_JOB_ID},${RUN_TIME}" >> "${LOG_CSV}"
+
 # Prefer node-local tmp for apptainer/singularity scratch
 export APPTAINER_TMPDIR="${NODE_TMP}"
 export APPTAINER_CACHEDIR="${NODE_TMP}/apptainer-cache"
 
 # Forward all user args to eval.py
 export ISAAC_ARGS="$*"
-: "${TASK_NAME:=Template-Rob6323-Go2-Direct-v0}"
+TASK_NAME="${TASK_NAME:-Template-Rob6323-Go2-Direct-v0}"
+EXPERIMENT_NAME=$(echo "$ISAAC_ARGS" | grep -oP '(?<=--experiment_name )\S+')
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-go2_flat_direct}"
 echo "ISAAC_ARGS=${ISAAC_ARGS}"
 echo "TASK_NAME=${TASK_NAME}"
 
@@ -105,12 +111,15 @@ CMD="--nv --containall \
   --env WANDB_CONFIG_DIR=${DOCKER_USER_HOME}/.config/wandb \
   --env WANDB_API_KEY=$WANDB_API_KEY \
   --env WANDB_PROJECT=$WANDB_PROJECT \
-  --env WANDB_RUN_NAME=$WANDB_RUN_NAME"
+  --env WANDB_RUN_NAME=$WANDB_RUN_NAME \
+  --env EXPERIMENT_NAME=$EXPERIMENT_NAME \
+  --env TASK_NAME=$TASK_NAME"
 
 echo "CMD to run: $CMD"
 
 singularity exec \
   $CMD \
+  --env ISAAC_ARGS="$ISAAC_ARGS" \
   "${SIF_IMAGE}" bash -lc '
 set -euo pipefail
 
@@ -126,10 +135,10 @@ export ISAACLAB_PATH=/workspace/isaaclab
   --headless \
   ${ISAAC_ARGS}
 
-# Identify the latest-created/modified subdirectory under go2_flat_direct
-LATEST_DIR=$(ls -td /workspace/isaaclab/logs/rsl_rl/go2_flat_direct/*/ 2>/dev/null | head -n 1 || true)
+# Identify the latest-created/modified subdirectory under go2_<task>
+LATEST_DIR="$(ls -td /workspace/isaaclab/logs/rsl_rl/${EXPERIMENT_NAME}/*/ 2>/dev/null | head -n 1 || true)"
 if [[ -z "${LATEST_DIR:-}" ]]; then
-  echo "No subdirectories found under /workspace/isaaclab/logs/rsl_rl/go2_flat_direct" >&2
+  echo "No subdirectories found under /workspace/isaaclab/logs/rsl_rl/${EXPERIMENT_NAME}" >&2
   exit 1
 fi
 LATEST_DIR="${LATEST_DIR%/}"

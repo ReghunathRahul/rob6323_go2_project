@@ -7,7 +7,7 @@ from isaaclab_assets.robots.unitree import UNITREE_GO2_CFG
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
-from isaaclab.assets import ArticulationCfg, ImplicitActuatorCfg
+from isaaclab.assets import ArticulationCfg
 from isaaclab.envs import DirectRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
@@ -27,7 +27,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # - spaces definition
     action_scale = 0.25
     action_space = 12
-    observation_space = 48
+    observation_space = 48 + 4  # add 4 for clock inputs
     state_space = 0
     debug_vis = True
 
@@ -60,8 +60,8 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     robot_cfg: ArticulationCfg = UNITREE_GO2_CFG.replace(prim_path="/World/envs/env_.*/Robot")
     robot_cfg.actuators["base_legs"] = ImplicitActuatorCfg(
         joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
-        effort_limit=23.5,
-        velocity_limit=30.0,
+        effort_limit_sim=23.5,
+        velocity_limit_sim=30.0,
         stiffness=0.0,
         damping=0.0,
     )
@@ -89,7 +89,6 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 0.5
     action_rate_reward_scale = -0.1
-    observation_space = 48 + 4  # add 4 for clock inputs
 
     raibert_heuristic_reward_scale = -10.0
     feet_clarety_reward_scale = -30.0
