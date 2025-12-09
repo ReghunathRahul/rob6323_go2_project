@@ -217,7 +217,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.log_dir = log_dir
 
     # initialize wandb logging if requested and available
-    wandb_logger, wandb_run = _init_wandb(agent_cfg, env_cfg, log_root_path, log_dir)
+    # wandb_logger, wandb_run = _init_wandb(agent_cfg, env_cfg, log_root_path, log_dir)
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
@@ -269,10 +269,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # close the simulator
     env.close()
-    if wandb_run is not None:
-        wandb_run.finish()
-    else:
-        wandb_logger.finish()
+    #if wandb_run is not None:
+    #    wandb_run.finish()
+    #else:
+    #    wandb_logger.finish()
 
 
 if __name__ == "__main__":

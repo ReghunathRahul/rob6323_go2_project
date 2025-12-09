@@ -70,6 +70,10 @@ mkdir -p \
 mkdir -p "${PERSISTENT_LOGS_DIR}"
 touch "${PERSISTENT_LOGS_DIR}/.keep"
 
+LOG_CSV="${PERSISTENT_LOGS_DIR}/runs.csv"
+RUN_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
+echo "${SLURM_JOB_ID},${RUN_TIME}" >> "${LOG_CSV}"
+
 # Prefer node-local tmp for apptainer/singularity scratch
 export APPTAINER_TMPDIR="${NODE_TMP}"
 export APPTAINER_CACHEDIR="${NODE_TMP}/apptainer-cache"
@@ -77,8 +81,17 @@ export APPTAINER_CACHEDIR="${NODE_TMP}/apptainer-cache"
 # Forward all user args to eval.py
 export ISAAC_ARGS="$*"
 TASK_NAME="${TASK_NAME:-Template-Rob6323-Go2-Direct-v0}"
+
+# nasty
+EXPERIMENT_NAME_GREP=$(echo "$ISAAC_ARGS" | grep -oP '(?<=--experiment_name )\\S+' || true)
+if [[ -n "$EXPERIMENT_NAME_GREP" ]]; then
+      EXPERIMENT_NAME="$EXPERIMENT_NAME_GREP"
+fi
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-go2_flat_direct}"
+
 echo "ISAAC_ARGS=${ISAAC_ARGS}"
 echo "TASK_NAME=${TASK_NAME}"
+echo "EXPERIMENT_NAME=${EXPERIMENT_NAME}"
 
 # WandB
 export WANDB_PROJECT=$PROJECT_NAME
@@ -106,6 +119,7 @@ CMD="--nv --containall \
   --env WANDB_API_KEY=$WANDB_API_KEY \
   --env WANDB_PROJECT=$WANDB_PROJECT \
   --env WANDB_RUN_NAME=$WANDB_RUN_NAME \
+  --env EXPERIMENT_NAME=$EXPERIMENT_NAME \
   --env TASK_NAME=$TASK_NAME"
 
 echo "CMD to run: $CMD"
@@ -123,27 +137,44 @@ export ISAACLAB_PATH=/workspace/isaaclab
 
 /isaac-sim/python.sh -m pip install -e /workspace/run/source/rob6323_go2
 
+echo "[singularity] ISAAC_ARGS=${ISAAC_ARGS}"
+
 /isaac-sim/python.sh /workspace/run/scripts/rsl_rl/train.py \
   --task="${TASK_NAME}" \
   --headless \
   ${ISAAC_ARGS}
 
-# Identify the latest-created/modified subdirectory under go2_<task>
-LATEST_DIR="$(ls -td /workspace/isaaclab/logs/rsl_rl/${TASK_NAME}/*/ 2>/dev/null | head -n 1 || true)"
+echo "[singularity] TASK_NAME=${TASK_NAME}"
+echo "[singularity] EXPERIMENT_NAME=${EXPERIMENT_NAME}"
+
+# Identify the latest-created/modified subdirectory under go2_<experiment_name>
+LATEST_DIR="$(ls -td /workspace/isaaclab/logs/rsl_rl/${EXPERIMENT_NAME}/*/ 2>/dev/null | head -n 1 || true)"
 if [[ -z "${LATEST_DIR:-}" ]]; then
-  echo "No subdirectories found under /workspace/isaaclab/logs/rsl_rl/${TASK_NAME}" >&2
+  echo "No subdirectories found under /workspace/isaaclab/logs/rsl_rl/${EXPERIMENT_NAME}" >&2
   exit 1
 fi
+
+echo "[singularity] LATEST_DIR=${LATEST_DIR}"
 LATEST_DIR="${LATEST_DIR%/}"
+
+# find latest checkpoint
+LATEST_CHECKPOINT="$(ls -t ${LATEST_DIR}/model_*.pt 2>/dev/null | head -n 1 || true)"
+if [[ -z "${LATEST_CHECKPOINT:-}" ]]; then
+  echo "No checkpoint files found in ${LATEST_DIR}" >&2
+  exit 1
+fi
+
+echo "[singularity] LATEST_CHECKPOINT=${LATEST_CHECKPOINT}"
+
+echo "[singularity] After checkpoint - LATEST_DIR=${LATEST_DIR}"
 
 # Run evaluation with the discovered checkpoint
 /isaac-sim/python.sh /workspace/run/scripts/rsl_rl/play.py \
   --task="${TASK_NAME}" \
-  --checkpoint "${LATEST_DIR}/model_499.pt" \
+  --checkpoint "${LATEST_CHECKPOINT}" \
   --video \
   --video_length 1000 \
   --headless \
-  ${ISAAC_ARGS}
 
 # WandB sync, TODO: we could use the built in WandB logger option
 /isaac-sim/python.sh -m wandb sync \

@@ -60,8 +60,8 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     robot_cfg: ArticulationCfg = UNITREE_GO2_CFG.replace(prim_path="/World/envs/env_.*/Robot")
     robot_cfg.actuators["base_legs"] = ImplicitActuatorCfg(
         joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
-        effort_limit=23.5,
-        velocity_limit=30.0,
+        effort_limit_sim=23.5,
+        velocity_limit_sim=30.0,
         stiffness=0.0,
         damping=0.0,
     )

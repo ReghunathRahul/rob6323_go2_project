@@ -24,6 +24,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
 
     def __init__(self, cfg: Rob6323Go2BackflipEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
+        self.progress_buf = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         self._episode_sums.update(
             {
                 "backflip_orientation": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
@@ -48,7 +49,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         target_pitch = (phase * 2 * math.pi) - math.pi
 
         # stay close to the pitch target
-        current_pitch = math_utils.quat_to_euler_xyz(self.robot.data.root_quat_w)[:, 1]
+        _, current_pitch, _ = math_utils.euler_xyz_from_quat(self.robot.data.root_quat_w)
         pitch_error = self._wrap_to_pi(current_pitch - target_pitch)
         orientation_reward = torch.exp(-(pitch_error**2) / (self.cfg.flip_pitch_sigma**2))
 
@@ -97,15 +98,15 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
     def _compute_phase(self,
     ) -> torch.Tensor:
         """
-        Compute the normalized phase (0, 1) within the flip period.
+        Compute the normalized phase [0, 1) within the flip period.
         """
         phase = (self.progress_buf * self.step_dt) / self.cfg.flip_period_s
-        return torch.remainder(phase, 1.0)
+        return phase % 1.
 
     @staticmethod
     def _wrap_to_pi(angle: torch.Tensor
     ) -> torch.Tensor:
         """
-        Wrap raw angles to the (-pi, pi) range for stable error metrics
+        Wrap raw angles to the [-pi, pi] range for stable error metrics
         """
         return torch.atan2(torch.sin(angle), torch.cos(angle))
