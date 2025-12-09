@@ -4,6 +4,17 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import gymnasium as gym
+from .rob6323_go2_env import Rob6323Go2Env
+from .rob6323_go2_env_cfg import Rob6323Go2EnvCfg
+from .rob6323_go2_backflip_env import Rob6323Go2BackflipEnv
+from .rob6323_go2_backflip_env_cfg import Rob6323Go2BackflipEnvCfg
+
+__all__ = [
+    "Rob6323Go2Env",
+    "Rob6323Go2EnvCfg",
+    "Rob6323Go2BackflipEnv",
+    "Rob6323Go2BackflipEnvCfg",
+]
 
 from . import agents
 

@@ -27,7 +27,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     # - spaces definition
     action_scale = 0.25
     action_space = 12
-    observation_space = 48
+    observation_space = 48 + 4  # add 4 for clock inputs
     state_space = 0
     debug_vis = True
 
@@ -89,7 +89,6 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 0.5
     action_rate_reward_scale = -0.1
-    observation_space = 48 + 4  # add 4 for clock inputs
 
     raibert_heuristic_reward_scale = -10.0
     feet_clarety_reward_scale = -30.0

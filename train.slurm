@@ -112,6 +112,7 @@ echo "CMD to run: $CMD"
 
 singularity exec \
   $CMD \
+  --env ISAAC_ARGS="$ISAAC_ARGS" \
   "${SIF_IMAGE}" bash -lc '
 set -euo pipefail
 
@@ -127,10 +128,10 @@ export ISAACLAB_PATH=/workspace/isaaclab
   --headless \
   ${ISAAC_ARGS}
 
-# Identify the latest-created/modified subdirectory under go2_flat_direct
-LATEST_DIR=$(ls -td /workspace/isaaclab/logs/rsl_rl/go2_flat_direct/*/ 2>/dev/null | head -n 1 || true)
+# Identify the latest-created/modified subdirectory under go2_<task>
+LATEST_DIR="$(ls -td /workspace/isaaclab/logs/rsl_rl/${TASK_NAME}/*/ 2>/dev/null | head -n 1 || true)"
 if [[ -z "${LATEST_DIR:-}" ]]; then
-  echo "No subdirectories found under /workspace/isaaclab/logs/rsl_rl/go2_flat_direct" >&2
+  echo "No subdirectories found under /workspace/isaaclab/logs/rsl_rl/${TASK_NAME}" >&2
   exit 1
 fi
 LATEST_DIR="${LATEST_DIR%/}"
