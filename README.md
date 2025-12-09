@@ -166,9 +166,54 @@ The suggested way to inspect these logs is via the Open OnDemand web interface:
 ---
 Students should only edit README.md below this line.
 
+## Project Solution
+| Authors              | Email                |
+|-------------------|----------------------|
+| **Long Quang**    | lq2146@nyu.edu       |
+| **Rahul Reghunath** | rr4660@nyu.edu     |
+| **Sourabh Misal** | srm9726@nyu.edu      |
+
+<sup>
+Authors are with New York University - Tandon School of Engineering
+<br> 6 MetroTech Center, Brooklyn, NY. 
+<br> All have contributed equally to this work.
+</sup>
+
+[Code](https://github.com/ReghunathRahul/rob6323_go2_project) | [Paper](#)
+
+## Repository layout
+- `source/rob6323_go2/`: Python package that defines the Go2 tasks, environment configuration, actuator models, and PPO hyperparameters.
+  - `rob6323_go2/tasks/**/rob6323_go2/*_go2_env.py`: Task logic (observations, rewards, termination, friction randomization, gait clock, debug visualization).
+  - `rob6323_go2/tasks/**/rob6323_go2/*_go2_env_cfg.py`: Environment, terrain, actuator, and reward-scale configuration.
+  - `rob6323_go2/tasks/**/rob6323_go2/agents/rsl_rl_ppo_cfg.py`: PPO network architecture, learning rates, iteration limits, and clip settings.
+- `scripts/`: Helper entry points (e.g., `scripts/rsl_rl/train.py`, `scripts/rsl_rl/play.py`).
+- `train.sh` / `train.slurm`: Submit RL training + evaluation to HPC queue.
+- `tests.sh` / `tests.slurm`: Submit pytests to HPC queue.
+- `docs/report`: Project report.
+- `tutorial/`: Upstream tutorial material.
+
+## Baseline implementation summary
+- **Observations:** Base linear/angular velocity in the body frame, projected gravity, commanded velocities, joint position offsets and velocities, previous actions, and four gait clock sinusoid inputs.
+- **Actions & control:** Actions are joint position offsets scaled by `action_scale` and tracked by a PD controller with per-joint `Kp`/`Kd` and torque limits. A friction model adds stiction and viscous losses before clamping torques.
+- **Reward shaping:**
+  - Exponential tracking of commanded planar velocity and yaw rate.
+  - Action-rate penalty using first- and second-order differences over the last three actions.
+  - Raibert foot-placement penalty comparing desired vs. measured footsteps from a sinusoidal gait clock.
+  - Penalties on roll/pitch (projected gravity), vertical velocity, joint velocities, and roll/pitch angular velocity.
+  - Swing-foot clearance bonus and stance contact-force tracking.
+- **Termination:** Episode ends on base-ground collision, upside-down orientation, minimum base height, or time-out.
+- **Randomization:** Commands are resampled each episode; actuator stiction/viscous friction are randomized within configured ranges; resets jitter start times to avoid synchronous rollouts.
+
 ### Task-specfic training
+Launch PPO training and automated evaluation from Greene. You may override `TASK_NAME` or pass extra flags to `scripts/rsl_rl/train.py` via `train.sh`.
 ```bash
-TASK_NAME=Template-Rob6323-Go2-<RobustWalk|Direct>-v0 ./train.sh --experiment_name go2_<task> --max_iterations 10000
-TASK_NAME=Template-Rob6323-Go2-<Backflip|Direct>-v0 ./train.sh --experiment_name go2_<task> --max_iterations 10000
-TASK_NAME=Template-Rob6323-Go2-<Bipedal|Direct>-v0 ./train.sh --experiment_name go2_<task> --max_iterations 10000
+cd ~/rob6323_go2_project
+TASK_NAME=Template-Rob6323-Go2-<Direct|Backflip|RobustLocomotion|Bipedal>-v0 ./train.sh --experiment_name go2_<flat_direct|backflip|robust_localmotion|bipedal> --max_iterations 1000
+```
+
+## Running tests
+Submit the provided automated checks to Burst:
+```bash
+cd ~/rob6323_go2_project
+./tests.sh
 ```
