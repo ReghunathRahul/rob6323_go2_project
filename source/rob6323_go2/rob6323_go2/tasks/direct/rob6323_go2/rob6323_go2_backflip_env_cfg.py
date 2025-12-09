@@ -17,7 +17,7 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     episode_length_s = 8.0
 
     # add features (sin/cos) to help the policy track where it is in flip.
-    observation_space = Rob6323Go2EnvCfg.observation_space + 2
+    observation_space = Rob6323Go2EnvCfg().observation_space + 2
 
     action_scale = 0.3
     debug_vis = False
@@ -38,5 +38,5 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     landing_reward_scale: float = 0.7
 
     # environment setup
-    scene = Rob6323Go2EnvCfg.scene.replace(num_envs=2048, env_spacing=5.0)
-    contact_sensor = Rob6323Go2EnvCfg.contact_sensor.replace(history_length=5)
+    scene = Rob6323Go2EnvCfg().scene.replace(num_envs=2048, env_spacing=5.0)
+    contact_sensor = Rob6323Go2EnvCfg().contact_sensor.replace(history_length=5)
