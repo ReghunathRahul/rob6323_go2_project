@@ -11,8 +11,9 @@ import torch
 
 import isaaclab.utils.math as math_utils
 
+from rob6323_go2.tasks.direct.rob6323_go2.rob6323_go2_env import Rob6323Go2Env
+
 from .rob6323_go2_backflip_env_cfg import Rob6323Go2BackflipEnvCfg
-from .rob6323_go2_env import Rob6323Go2Env
 
 
 class Rob6323Go2BackflipEnv(Rob6323Go2Env):
