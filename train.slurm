@@ -24,6 +24,8 @@ LOCAL_PROJECT="${HOME}/${PROJECT_NAME}"
 REMOTE_PROJECT="${HOME}/${PROJECT_NAME}"
 ISAACLAB_DIR="/scratch/$USER/IsaacLab"
 REMOTE_CONFIG="${HOME}/.config"
+LOG_CSV="${LOCAL_PROJECT}/logs/runs.csv"
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-go2_flat_direct}"
 
 # Ensure local project exists and mirrors remote (first time creates it)
 mkdir -p "${LOCAL_PROJECT}"
@@ -70,10 +72,6 @@ mkdir -p \
 mkdir -p "${PERSISTENT_LOGS_DIR}"
 touch "${PERSISTENT_LOGS_DIR}/.keep"
 
-LOG_CSV="${PERSISTENT_LOGS_DIR}/runs.csv"
-RUN_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
-echo "${SLURM_JOB_ID},${RUN_TIME}" >> "${LOG_CSV}"
-
 # Prefer node-local tmp for apptainer/singularity scratch
 export APPTAINER_TMPDIR="${NODE_TMP}"
 export APPTAINER_CACHEDIR="${NODE_TMP}/apptainer-cache"
@@ -83,15 +81,13 @@ export ISAAC_ARGS="$*"
 TASK_NAME="${TASK_NAME:-Template-Rob6323-Go2-Direct-v0}"
 
 # nasty
-EXPERIMENT_NAME_GREP=$(echo "$ISAAC_ARGS" | grep -oP '(?<=--experiment_name )\\S+' || true)
+EXPERIMENT_NAME_GREP=$(echo "$ISAAC_ARGS" | tr -s ' ' | grep -oP '(?<=--experiment_name )\S+' || true)
 if [[ -n "$EXPERIMENT_NAME_GREP" ]]; then
       EXPERIMENT_NAME="$EXPERIMENT_NAME_GREP"
 fi
-EXPERIMENT_NAME="${EXPERIMENT_NAME:-go2_flat_direct}"
-
-echo "ISAAC_ARGS=${ISAAC_ARGS}"
-echo "TASK_NAME=${TASK_NAME}"
-echo "EXPERIMENT_NAME=${EXPERIMENT_NAME}"
+echo "[burst] ISAAC_ARGS=${ISAAC_ARGS}"
+echo "[burst] TASK_NAME=${TASK_NAME}"
+echo "[burst] EXPERIMENT_NAME=${EXPERIMENT_NAME}"
 
 # WandB
 export WANDB_PROJECT=$PROJECT_NAME
@@ -122,7 +118,7 @@ CMD="--nv --containall \
   --env EXPERIMENT_NAME=$EXPERIMENT_NAME \
   --env TASK_NAME=$TASK_NAME"
 
-echo "CMD to run: $CMD"
+echo "[burst] CMD to run: $CMD"
 
 singularity exec \
   $CMD \
@@ -150,7 +146,7 @@ echo "[singularity] EXPERIMENT_NAME=${EXPERIMENT_NAME}"
 # Identify the latest-created/modified subdirectory under go2_<experiment_name>
 LATEST_DIR="$(ls -td /workspace/isaaclab/logs/rsl_rl/${EXPERIMENT_NAME}/*/ 2>/dev/null | head -n 1 || true)"
 if [[ -z "${LATEST_DIR:-}" ]]; then
-  echo "No subdirectories found under /workspace/isaaclab/logs/rsl_rl/${EXPERIMENT_NAME}" >&2
+  echo "[singularity] No subdirectories found under /workspace/isaaclab/logs/rsl_rl/${EXPERIMENT_NAME}" >&2
   exit 1
 fi
 
@@ -160,13 +156,11 @@ LATEST_DIR="${LATEST_DIR%/}"
 # find latest checkpoint
 LATEST_CHECKPOINT="$(ls -t ${LATEST_DIR}/model_*.pt 2>/dev/null | head -n 1 || true)"
 if [[ -z "${LATEST_CHECKPOINT:-}" ]]; then
-  echo "No checkpoint files found in ${LATEST_DIR}" >&2
+  echo "[singularity] No checkpoint files found in ${LATEST_DIR}" >&2
   exit 1
 fi
 
 echo "[singularity] LATEST_CHECKPOINT=${LATEST_CHECKPOINT}"
-
-echo "[singularity] After checkpoint - LATEST_DIR=${LATEST_DIR}"
 
 # Run evaluation with the discovered checkpoint
 /isaac-sim/python.sh /workspace/run/scripts/rsl_rl/play.py \
@@ -179,13 +173,21 @@ echo "[singularity] After checkpoint - LATEST_DIR=${LATEST_DIR}"
 # WandB sync, TODO: we could use the built in WandB logger option
 /isaac-sim/python.sh -m wandb sync \
     --sync-tensorboard \
-    --project rsl_rl \
-    /workspace/isaaclab/logs/rsl_rl
+    --project ${WANDB_PROJECT} \
+    --id ${WANDB_RUN_NAME} \
+    ${LATEST_DIR}/
 '
 
 rsync -az --delete \
   --exclude='*.err' \
   --exclude='*.out' \
   -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null" \
-  "${PERSISTENT_LOGS_DIR}/" \
-  "${REMOTE_HOST}:${REMOTE_PROJECT}/logs/${SLURM_JOB_ID}/"
+  "${PERSISTENT_LOGS_DIR}/${SLURM_JOB_ID}/" \
+  "${REMOTE_HOST}:${REMOTE_PROJECT}/logs/"
+
+RUN_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
+echo "${SLURM_JOB_ID}, \
+    ${RUN_TIME}, \
+    ${EXPERIMENT_NAME}, \
+    ${TASK_NAME}" \
+    >> "${LOG_CSV}"
