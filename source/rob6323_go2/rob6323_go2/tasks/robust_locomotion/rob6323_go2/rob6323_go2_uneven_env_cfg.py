@@ -7,7 +7,7 @@ from isaaclab import sim as sim_utils
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG
 
-from .rob6323_go2_env_cfg import Rob6323Go2EnvCfg
+from rob6323_go2.tasks.direct.rob6323_go2.rob6323_go2_env_cfg import Rob6323Go2EnvCfg
 
 @configclass
 class Rob6323Go2UnevenEnvCfg(Rob6323Go2EnvCfg):
