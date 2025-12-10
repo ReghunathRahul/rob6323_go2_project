@@ -26,6 +26,8 @@ EXTRA_REQUIRES = {
     "wandb": ["wandb"],
     "dev": [
         "pytest",
+        "torch",
+        "omni",
     ],
 }
 
