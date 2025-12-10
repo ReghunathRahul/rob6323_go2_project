@@ -21,6 +21,11 @@ INSTALL_REQUIRES = [
     "psutil",
 ]
 
+EXTRA_REQUIRES = {
+    "wandb": ["wandb"],
+    "dev": ["pytest"],
+}
+
 # Installation operation
 setup(
     name="rob6323_go2",

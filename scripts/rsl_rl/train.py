@@ -8,7 +8,9 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import importlib
 import sys
+import os
 
 from isaaclab.app import AppLauncher
 
@@ -104,6 +106,62 @@ torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
 
 
+class _DummyWandb:
+    """
+    Fallback to mirror the wandb API when login fails.
+    """
+
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: None
+
+
+def _init_wandb(agent_cfg, env_cfg, log_root_path: str, log_dir: str):
+    """
+    Initialize wandb and mirror logs.
+    """
+
+    if getattr(agent_cfg, "logger", None) != "wandb":
+        return _DummyWandb(), None
+
+    wandb_spec = importlib.util.find_spec("wandb")
+    if wandb_spec is None:
+        print("wandb is not installed.")
+        return _DummyWandb(), None
+
+    wandb = importlib.import_module("wandb")
+
+    # login_success = False
+    # try:
+    #     login_success = bool(wandb.login(relogin=True))
+    # except Exception as exc:
+    #     print(f"wandb login failed. ({exc})")
+
+    # if not login_success:
+    #     return _DummyWandb(), None
+
+    wandb.tensorboard.patch(root_logdir=log_root_path, pytorch=True)
+    wandb_project = os.environ.get(
+        "WANDB_PROJECT",
+        getattr(agent_cfg, "wandb_project", agent_cfg.experiment_name)
+    )
+    run_name = os.path.basename(log_dir)
+    wandb_config = {}
+    if hasattr(env_cfg, "to_dict"):
+        wandb_config["env_cfg"] = env_cfg.to_dict()
+    if hasattr(agent_cfg, "to_dict"):
+        wandb_config["agent_cfg"] = agent_cfg.to_dict()
+
+    wandb_run = wandb.init(
+        project=wandb_project,
+        name=run_name,
+        dir=log_root_path,
+        sync_tensorboard=True,
+        config=wandb_config if wandb_config else None,
+    )
+
+    return wandb, wandb_run
+
+
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: RslRlBaseRunnerCfg):
     """Train with RSL-RL agent."""
@@ -158,6 +216,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # set the log directory for the environment (works for all environment types)
     env_cfg.log_dir = log_dir
 
+    # initialize wandb logging if requested and available
+    # wandb_logger, wandb_run = _init_wandb(agent_cfg, env_cfg, log_root_path, log_dir)
+
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
@@ -208,6 +269,10 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # close the simulator
     env.close()
+    #if wandb_run is not None:
+    #    wandb_run.finish()
+    #else:
+    #    wandb_logger.finish()
 
 
 if __name__ == "__main__":
