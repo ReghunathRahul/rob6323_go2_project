@@ -49,5 +49,5 @@ class Rob6323Go2BipedalEnvCfg(Rob6323Go2EnvCfg):
     action_smoothness_scale: float = 0.05
 
     # environment scaling
-    scene = Rob6323Go2EnvCfg.scene.replace(num_envs=1536, env_spacing=5.5)
-    contact_sensor = Rob6323Go2EnvCfg.contact_sensor.replace(history_length=4)
+    scene = Rob6323Go2EnvCfg().scene.replace(num_envs=1536, env_spacing=5.5)
+    contact_sensor = Rob6323Go2EnvCfg().contact_sensor.replace(history_length=4)

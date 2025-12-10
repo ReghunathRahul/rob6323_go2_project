@@ -1,19 +1,17 @@
 """
-Robust locomotion for uneven terrain.
+Robust locomotion for forest terrain loaded from USD.
 """
 
 from isaaclab.utils import configclass
 from isaaclab import sim as sim_utils
-from isaaclab.terrains import TerrainImporterCfg, TerrainGeneratorCfg, SubTerrainBaseCfg
+from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG
 
 from rob6323_go2.tasks.direct.rob6323_go2.rob6323_go2_env_cfg import Rob6323Go2EnvCfg
 
-class FlatSubTerrainCfg(SubTerrainBaseCfg):
-    function = flat
-    proportion = 1.0
-    size = (10.0, 10.0)
-    flat_patch_sampling = None
+# hack
+import os
+usd_path = os.environ.get("USD_TERRAIN_PATH", "/default/path/to/terrain.usd")
 
 @configclass
 class Rob6323Go2UnevenEnvCfg(Rob6323Go2EnvCfg):
@@ -30,35 +28,11 @@ class Rob6323Go2UnevenEnvCfg(Rob6323Go2EnvCfg):
     )
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.35, 0.35, 0.35)
 
-    flat_subterrain = FlatSubTerrainCfg(
-        function=flat,
-        proportion=1.0,
-        size=(10.0, 10.0),
-        flat_patch_sampling=None,
-    )
-
-    # use a procedural terrain generator for randomized fields
+    # load terrain from a USD file
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
-        terrain_type="generator",
-        terrain_generator=TerrainGeneratorCfg(
-            num_rows=10,
-            num_cols=10,
-            curriculum=True,
-            size=6.0,
-            border_width=0.5,
-            border_height=0.2,
-            color_scheme="default",
-            horizontal_scale=0.1,
-            vertical_scale=0.05,
-            slope_threshold=0.3,
-            difficulty_range=(0.0, 1.0),
-            use_cache=False,
-            cache_dir="/tmp/terrain_cache",
-            sub_terrains={
-                "flat": flat_subterrain,
-            },
-        ),
+        terrain_type="usd",
+        usd_path=usd_path,  # set using env USD_TERRAIN_PATH
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",

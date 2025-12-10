@@ -60,7 +60,8 @@ class Rob6323Go2BipedalEnv(Rob6323Go2Env):
         velocity_reward = torch.exp(-speed_error / (self.cfg.speed_sigma**2))
 
         # encourage an upright torso with a controlled height target
-        roll_pitch = math_utils.quat_to_euler_xyz(self.robot.data.root_quat_w)[:, :2]
+        roll, pitch, _ = math_utils.euler_xyz_from_quat(self.robot.data.root_quat_w)
+        roll_pitch = torch.stack([roll, pitch], dim=1)
         upright_error = torch.sum(torch.square(roll_pitch), dim=1)
         upright_reward = torch.exp(-upright_error / (self.cfg.upright_sigma**2))
 

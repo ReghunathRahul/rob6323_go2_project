@@ -92,7 +92,7 @@ echo "[burst] EXPERIMENT_NAME=${EXPERIMENT_NAME}"
 # WandB
 export WANDB_PROJECT=$PROJECT_NAME
 export WANDB_API_KEY="$(cat "${REMOTE_CONFIG}/wandb/.key" 2>/dev/null || true)"
-export WANDB_RUN_NAME="exp_${SLURM_JOB_ID}"
+export WANDB_RUN_NAME="${EXPERIMENT_NAME}_${SLURM_JOB_ID}"
 
 # Execute with GPU and required binds
 CMD="--nv --containall \
@@ -178,11 +178,11 @@ echo "[singularity] LATEST_CHECKPOINT=${LATEST_CHECKPOINT}"
     ${LATEST_DIR}/
 '
 
-rsync -az --delete \
+rsync -az \
   --exclude='*.err' \
   --exclude='*.out' \
   -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null" \
-  "${PERSISTENT_LOGS_DIR}/${SLURM_JOB_ID}/" \
+  "${PERSISTENT_LOGS_DIR}/../${SLURM_JOB_ID}/" \
   "${REMOTE_HOST}:${REMOTE_PROJECT}/logs/"
 
 RUN_TIME="$(date '+%Y-%m-%d %H:%M:%S')"

@@ -74,12 +74,5 @@ set -euo pipefail
 /isaac-sim/python.sh -m pip install -e /workspace/run/source/rob6323_go2[dev]
 
 cd /workspace/run/source/rob6323_go2/tests
-pytest
+/isaac-sim/python.sh pytest
 '
-
-rsync -az --delete \
-  --exclude='*.err' \
-  --exclude='*.out' \
-  -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null" \
-  "${PERSISTENT_LOGS_DIR}/" \
-  "${REMOTE_HOST}:${REMOTE_PROJECT}/logs/${SLURM_JOB_ID}/"
