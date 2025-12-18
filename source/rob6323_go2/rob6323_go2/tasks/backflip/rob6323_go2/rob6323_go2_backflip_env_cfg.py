@@ -27,7 +27,7 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     curriculum_duration_steps: float = 3_000_000.0
 
     # task timing and reward shaping parameters
-    flip_period_s: float = 1.2
+    flip_period_s: float = 0.9
     takeoff_phase_portion: float = 0.25
     airborne_phase_start: float = 0.25
     airborne_phase_end: float = 0.75
