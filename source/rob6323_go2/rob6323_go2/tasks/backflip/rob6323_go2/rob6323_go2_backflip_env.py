@@ -28,11 +28,14 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         self.progress_buf = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         self._episode_sums.update(
             {
-                "backflip_orientation": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "backflip_takeoff": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "backflip_airborne": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "backflip_landing": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "action_smoothness_penalty": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "takeoff_power": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "takeoff_stable": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "air_spin": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "air_spin_miss": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "air_penalty": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "land_orient": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "land_still": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "smoothness": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
             }
         )
 
@@ -71,11 +74,18 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         takeoff_reward = is_takeoff * vel_z * 2.0
         
         # Penalize rotation during takeoff (prevent slipping)
-        takeoff_stable_reward = is_takeoff * torch.exp(-(root_ang_vel[:, 1]**2) / 1.0)
+        # takeoff_stable_reward = is_takeoff * torch.exp(-(root_ang_vel[:, 1]**2) / 1.0)
+        takeoff_stable_reward = is_takeoff * torch.exp(-(root_ang_vel[:, 1]**2) / 2.0)
 
         # Orientation reward is ZERO here. 
         # We ONLY reward spinning pitch velocity.
         current_spin = root_ang_vel[:, 1]
+
+        min_required_spin = -4.0  # rad/s, must be rotating backward
+        spin_deficit = torch.clamp(min_required_spin - current_spin, min=0.0)
+
+        # Penalize not rotating in the air
+        spin_miss_penalty = is_airborne * spin_deficit
         
         # Rate reward: Gaussian focused on the target spin
         spin_error = current_spin - target_spin_speed
@@ -90,33 +100,46 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         # Target is effectively 0 pitch (upright)
         pitch_error = torch.abs(self._wrap_to_pi(current_pitch))
         land_orient_reward = is_landing * torch.exp(-(pitch_error**2) / 0.5)
-        
+
         # Reward low velocity (stability)
         vel_xy = torch.norm(root_lin_vel[:, :2], dim=-1)
         land_still_reward = is_landing * torch.exp(-vel_xy / 1.0)
-
         action_smoothness = -torch.mean(torch.square(self._actions - self._previous_actions), dim=1)
 
         rewards = {
-            "takeoff_power": takeoff_reward * 1.0,
+            "takeoff_power": takeoff_reward * 0.5,
             "takeoff_stable": takeoff_stable_reward * 0.5,
-            
-            # Massive weight on spin to force the flip
-            "air_spin": rate_reward * 4.0, 
+
+            "air_spin": rate_reward * 4.0,
+            "air_spin_miss": -spin_miss_penalty * 3.5,  
             "air_penalty": air_penalty,
-            
-            "land_orient": land_orient_reward * 1.0,
-            "land_still": land_still_reward * 0.5,
-            
+
+            "land_orient": land_orient_reward * 2.0,
+            "land_still": land_still_reward * 1.5,
+
             "smoothness": action_smoothness * 0.05
         }
 
+        for key, value in rewards.items():
+            if key in self._episode_sums:
+                self._episode_sums[key] += value
+
         return torch.sum(torch.stack(list(rewards.values())), dim=0)
+    
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         super()._reset_idx(env_ids)
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
+
+        if "episode" not in self.extras:
+            self.extras["episode"] = {}
+
+        for key in self._episode_sums.keys():
+            # Calculate mean for the resetting environments
+            self.extras["episode"][key] = self._episode_sums[key][env_ids].mean()
+            # Reset accumulator
+            self._episode_sums[key][env_ids] = 0.0
 
         self._commands[env_ids] = 0.0
 
