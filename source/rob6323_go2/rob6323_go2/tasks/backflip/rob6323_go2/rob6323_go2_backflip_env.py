@@ -48,7 +48,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         phase = self._compute_phase()
         current_step = self.common_step_counter
         
-        # --- 1. Curriculum (Speed up the ramp) ---
+        
         # Shorten to 3M steps to see results faster
         curriculum_duration = 3_000_000.0 
         curriculum_factor = torch.clamp(torch.tensor(current_step / curriculum_duration), 0.0, 1.0).to(self.device)
@@ -56,21 +56,16 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         # Target spin ramps from -6.0 to -12.0 rad/s (Need FAST spin for backflip)
         target_spin_speed = -6.0 + (curriculum_factor * -6.0) 
 
-        # --- 2. Phase Definitions ---
         # strict phases to prevent "blurring"
         is_takeoff = phase < 0.2
         is_airborne = (phase >= 0.2) & (phase <= 0.75)
         is_landing = phase > 0.75
         
-        # --- 3. Get States ---
         root_lin_vel = self.robot.data.root_lin_vel_w
         root_ang_vel = self.robot.data.root_ang_vel_b
         root_quat = self.robot.data.root_quat_w
         _, current_pitch, _ = math_utils.euler_xyz_from_quat(root_quat)
 
-        # -----------------------------------------------------------------------
-        # PHASE 1: TAKEOFF (Pure Power)
-        # -----------------------------------------------------------------------
         # Reward upward velocity
         vel_z = torch.clamp(root_lin_vel[:, 2], min=0.0)
         takeoff_reward = is_takeoff * vel_z * 2.0
@@ -78,10 +73,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         # Penalize rotation during takeoff (prevent slipping)
         takeoff_stable_reward = is_takeoff * torch.exp(-(root_ang_vel[:, 1]**2) / 1.0)
 
-        # -----------------------------------------------------------------------
-        # PHASE 2: AIRBORNE (The "No Fear" Zone)
-        # -----------------------------------------------------------------------
-        # [CRITICAL] Orientation reward is ZERO here. 
+        # Orientation reward is ZERO here. 
         # We ONLY reward spinning pitch velocity.
         current_spin = root_ang_vel[:, 1]
         
@@ -94,9 +86,6 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         contact_forces = torch.norm(self._contact_sensor.data.net_forces_w_history[:, -1], dim=-1).sum(dim=1)
         air_penalty = is_airborne * (contact_forces > 1.0).float() * -0.5
 
-        # -----------------------------------------------------------------------
-        # PHASE 3: LANDING (Stick it)
-        # -----------------------------------------------------------------------
         # Now we turn Orientation reward BACK ON.
         # Target is effectively 0 pitch (upright)
         pitch_error = torch.abs(self._wrap_to_pi(current_pitch))
@@ -106,9 +95,6 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         vel_xy = torch.norm(root_lin_vel[:, :2], dim=-1)
         land_still_reward = is_landing * torch.exp(-vel_xy / 1.0)
 
-        # -----------------------------------------------------------------------
-        # COMPOSE
-        # -----------------------------------------------------------------------
         action_smoothness = -torch.mean(torch.square(self._actions - self._previous_actions), dim=1)
 
         rewards = {
