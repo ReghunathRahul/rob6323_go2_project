@@ -28,11 +28,13 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         self.progress_buf = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         self._episode_sums.update(
             {
-                "backflip_orientation": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "backflip_takeoff": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "backflip_airborne": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "backflip_landing": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "action_smoothness_penalty": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "takeoff_power": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "takeoff_stable": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "air_spin": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "air_penalty": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "land_orient": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "land_still": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "smoothness": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
             }
         )
 
@@ -111,12 +113,26 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
             "smoothness": action_smoothness * 0.05
         }
 
-        return torch.sum(torch.stack(list(rewards.values())), dim=0)
+        for key, value in rewards.items():
+            if key in self._episode_sums:
+                self._episode_sums[key] += value
 
+        return torch.sum(torch.stack(list(rewards.values())), dim=0)
+    
+    
     def _reset_idx(self, env_ids: Sequence[int] | None):
         super()._reset_idx(env_ids)
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
+
+        if "episode" not in self.extras:
+            self.extras["episode"] = {}
+
+        for key in self._episode_sums.keys():
+            # Calculate mean for the resetting environments
+            self.extras["episode"][key] = self._episode_sums[key][env_ids].mean()
+            # Reset accumulator
+            self._episode_sums[key][env_ids] = 0.0
 
         self._commands[env_ids] = 0.0
 
