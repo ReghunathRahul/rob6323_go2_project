@@ -47,7 +47,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
     def _get_rewards(self,
     ) -> torch.Tensor:
         phase = self._compute_phase()
-        target_pitch = (phase * 2 * math.pi) - math.pi
+        target_pitch = -2 * math.pi * phase
 
         # stay close to the pitch target
         _, current_pitch, _ = math_utils.euler_xyz_from_quat(self.robot.data.root_quat_w)
@@ -56,7 +56,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
 
         # reward upward momentum during the takeoff
         takeoff_mask = phase < self.cfg.takeoff_phase_portion
-        vertical_velocity = torch.clamp(self.robot.data.root_lin_vel_b[:, 2], min=0.0)
+        vertical_velocity = torch.clamp(self.robot.data.root_lin_vel_w[:, 2], min=0.0)
         takeoff_reward = takeoff_mask * vertical_velocity
 
         # use contact forces to encourage being airborne during the mid
