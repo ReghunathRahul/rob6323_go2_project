@@ -46,73 +46,86 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
 
     def _get_rewards(self) -> torch.Tensor:
         phase = self._compute_phase()
-        
-        # --- 1. Compute Curriculum Factor ---
-        # 0.0 = Start of training (Easy)
-        # 1.0 = End of curriculum (Hard)
-        # Note: self.common_step_counter is standard in Isaac Lab. 
-        # If it throws an error, use self.episode_length_buf.mean() or similar, 
-        # but usually common_step_counter is available in DirectRLEnv.
         current_step = self.common_step_counter
-        curriculum_factor = torch.clamp(
-            torch.tensor(current_step / self.cfg.curriculum_duration_steps), 
-            min=0.0, max=1.0
-        ).to(self.device)
-
-        # --- 2. Define Phases ---
-        is_takeoff = phase < self.cfg.takeoff_phase_portion
-        is_airborne = (phase >= self.cfg.airborne_phase_start) & (phase <= self.cfg.airborne_phase_end)
-        is_landing = phase > self.cfg.airborne_phase_end
         
-        # State
+        # --- 1. Curriculum (Speed up the ramp) ---
+        # Shorten to 3M steps to see results faster
+        curriculum_duration = 3_000_000.0 
+        curriculum_factor = torch.clamp(torch.tensor(current_step / curriculum_duration), 0.0, 1.0).to(self.device)
+        
+        # Target spin ramps from -6.0 to -12.0 rad/s (Need FAST spin for backflip)
+        target_spin_speed = -6.0 + (curriculum_factor * -6.0) 
+
+        # --- 2. Phase Definitions ---
+        # strict phases to prevent "blurring"
+        is_takeoff = phase < 0.2
+        is_airborne = (phase >= 0.2) & (phase <= 0.75)
+        is_landing = phase > 0.75
+        
+        # --- 3. Get States ---
         root_lin_vel = self.robot.data.root_lin_vel_w
         root_ang_vel = self.robot.data.root_ang_vel_b
-        _, current_pitch, _ = math_utils.euler_xyz_from_quat(self.robot.data.root_quat_w)
+        root_quat = self.robot.data.root_quat_w
+        _, current_pitch, _ = math_utils.euler_xyz_from_quat(root_quat)
 
-        # --- 3. REWARD: Takeoff ---
-        vertical_vel = torch.clamp(root_lin_vel[:, 2], min=0.0)
-        takeoff_reward = is_takeoff * vertical_vel * 1.5 
+        # -----------------------------------------------------------------------
+        # PHASE 1: TAKEOFF (Pure Power)
+        # -----------------------------------------------------------------------
+        # Reward upward velocity
+        vel_z = torch.clamp(root_lin_vel[:, 2], min=0.0)
+        takeoff_reward = is_takeoff * vel_z * 2.0
         
-        # --- 4. REWARD: Airborne (Curriculum Applied Here!) ---
-        # Start target at 0.0, ramp down to -8.0 (or whatever is in cfg)
-        target_spin = self.cfg.target_flip_speed * curriculum_factor
+        # Penalize rotation during takeoff (prevent slipping)
+        takeoff_stable_reward = is_takeoff * torch.exp(-(root_ang_vel[:, 1]**2) / 1.0)
+
+        # -----------------------------------------------------------------------
+        # PHASE 2: AIRBORNE (The "No Fear" Zone)
+        # -----------------------------------------------------------------------
+        # [CRITICAL] Orientation reward is ZERO here. 
+        # We ONLY reward spinning pitch velocity.
         current_spin = root_ang_vel[:, 1]
         
-        # Calculate error
-        spin_error = torch.abs(current_spin - target_spin)
+        # Rate reward: Gaussian focused on the target spin
+        spin_error = current_spin - target_spin_speed
+        # We use a wider sigma initially so it finds the gradient easily
+        rate_reward = is_airborne * torch.exp(-(spin_error**2) / 5.0)
         
-        # As the task gets harder (target_spin increases), we can loosen the sigma slightly
-        # to prevent frustration, or keep it constant.
-        rate_reward = is_airborne * torch.exp(-(spin_error**2) / (4.0**2))
+        # Optional: Penalize touching the ground in the air (drag)
+        contact_forces = torch.norm(self._contact_sensor.data.net_forces_w_history[:, -1], dim=-1).sum(dim=1)
+        air_penalty = is_airborne * (contact_forces > 1.0).float() * -0.5
 
-        # --- 5. REWARD: Landing ---
-        landing_pitch_error = torch.abs(self._wrap_to_pi(current_pitch))
-        landing_reward = is_landing * torch.exp(-(landing_pitch_error**2) / 0.5)
+        # -----------------------------------------------------------------------
+        # PHASE 3: LANDING (Stick it)
+        # -----------------------------------------------------------------------
+        # Now we turn Orientation reward BACK ON.
+        # Target is effectively 0 pitch (upright)
+        pitch_error = torch.abs(self._wrap_to_pi(current_pitch))
+        land_orient_reward = is_landing * torch.exp(-(pitch_error**2) / 0.5)
         
-        # Landing Stability (Stop moving horizontally)
-        landing_vel_penalty = is_landing * torch.norm(root_lin_vel[:, :2], dim=-1)
-        landing_reward *= torch.exp(-landing_vel_penalty / 1.0)
+        # Reward low velocity (stability)
+        vel_xy = torch.norm(root_lin_vel[:, :2], dim=-1)
+        land_still_reward = is_landing * torch.exp(-vel_xy / 1.0)
 
-        # --- 6. Penalties ---
-        action_delta = self._actions - self._previous_actions
-        smoothness_penalty = torch.mean(torch.square(action_delta), dim=1)
+        # -----------------------------------------------------------------------
+        # COMPOSE
+        # -----------------------------------------------------------------------
+        action_smoothness = -torch.mean(torch.square(self._actions - self._previous_actions), dim=1)
 
-        # --- 7. Compose ---
         rewards = {
-            "takeoff_impulse": takeoff_reward * self.cfg.takeoff_vel_reward_scale,
-            "backflip_spin": rate_reward * 3.0, 
-            "landing_stability": landing_reward * self.cfg.landing_reward_scale,
-            "action_smoothness": -smoothness_penalty * self.cfg.action_smoothness_scale,
+            "takeoff_power": takeoff_reward * 1.0,
+            "takeoff_stable": takeoff_stable_reward * 0.5,
+            
+            # Massive weight on spin to force the flip
+            "air_spin": rate_reward * 4.0, 
+            "air_penalty": air_penalty,
+            
+            "land_orient": land_orient_reward * 1.0,
+            "land_still": land_still_reward * 0.5,
+            
+            "smoothness": action_smoothness * 0.05
         }
 
-        reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
-
-        for key, value in rewards.items():
-             if key not in self._episode_sums:
-                self._episode_sums[key] = torch.zeros_like(value)
-             self._episode_sums[key] += value
-             
-        return reward
+        return torch.sum(torch.stack(list(rewards.values())), dim=0)
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         super()._reset_idx(env_ids)
