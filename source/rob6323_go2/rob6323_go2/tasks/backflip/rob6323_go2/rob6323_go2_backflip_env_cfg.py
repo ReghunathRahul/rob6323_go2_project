@@ -20,14 +20,14 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     # add features (sin/cos) to help the policy track where it is in flip.
     observation_space = Rob6323Go2EnvCfg().observation_space + 2
 
-    action_scale = 1.5
+    action_scale = 2.5
     debug_vis = False
 
     # curriculum learning settings
     curriculum_duration_steps: float = 3_000_000.0
 
     # task timing and reward shaping parameters
-    flip_period_s: float = 1.0
+    flip_period_s: float = 1.2
     takeoff_phase_portion: float = 0.25
     airborne_phase_start: float = 0.25
     airborne_phase_end: float = 0.75
