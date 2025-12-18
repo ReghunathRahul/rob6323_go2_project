@@ -47,50 +47,49 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
     def _get_rewards(self) -> torch.Tensor:
         phase = self._compute_phase()
         
-        # --- 1. Define Phases ---
-        # Takeoff: 0.0 -> 0.25
-        # Air:     0.25 -> 0.75
-        # Landing: 0.75 -> 1.0
+        # --- 1. Compute Curriculum Factor ---
+        # 0.0 = Start of training (Easy)
+        # 1.0 = End of curriculum (Hard)
+        # Note: self.common_step_counter is standard in Isaac Lab. 
+        # If it throws an error, use self.episode_length_buf.mean() or similar, 
+        # but usually common_step_counter is available in DirectRLEnv.
+        current_step = self.common_step_counter
+        curriculum_factor = torch.clamp(
+            torch.tensor(current_step / self.cfg.curriculum_duration_steps), 
+            min=0.0, max=1.0
+        ).to(self.device)
+
+        # --- 2. Define Phases ---
         is_takeoff = phase < self.cfg.takeoff_phase_portion
         is_airborne = (phase >= self.cfg.airborne_phase_start) & (phase <= self.cfg.airborne_phase_end)
         is_landing = phase > self.cfg.airborne_phase_end
         
-        # --- 2. Get State ---
-        # Root states
-        root_quat = self.robot.data.root_quat_w
+        # State
         root_lin_vel = self.robot.data.root_lin_vel_w
         root_ang_vel = self.robot.data.root_ang_vel_b
-        _, current_pitch, _ = math_utils.euler_xyz_from_quat(root_quat)
+        _, current_pitch, _ = math_utils.euler_xyz_from_quat(self.robot.data.root_quat_w)
 
-        # --- 3. REWARD: Takeoff (Jump Up, Stay Upright) ---
-        # We reward Z velocity, but PENALIZE tilting back too early.
-        # If it tilts back on the ground, it slips.
+        # --- 3. REWARD: Takeoff ---
         vertical_vel = torch.clamp(root_lin_vel[:, 2], min=0.0)
-        takeoff_reward = is_takeoff * vertical_vel * 1.5  # Boost takeoff
+        takeoff_reward = is_takeoff * vertical_vel * 1.5 
         
-        # Penalty for bad posture during takeoff (keep pitch close to 0)
-        takeoff_posture_error = torch.abs(self._wrap_to_pi(current_pitch))
-        takeoff_posture_reward = is_takeoff * torch.exp(-(takeoff_posture_error**2) / 0.5)
-
-        # --- 4. REWARD: Airborne (SPIN FAST!) ---
-        # We don't care about the angle here. We just want massive negative pitch velocity.
-        # Target: -8.0 rad/s (approx 1.3 full rotations per second)
-        target_spin = -8.0 
-        current_spin = root_ang_vel[:, 1] # Pitch velocity in body frame
+        # --- 4. REWARD: Airborne (Curriculum Applied Here!) ---
+        # Start target at 0.0, ramp down to -8.0 (or whatever is in cfg)
+        target_spin = self.cfg.target_flip_speed * curriculum_factor
+        current_spin = root_ang_vel[:, 1]
         
-        # We use a wider sigma (4.0) so it gets points even for slow spins initially
+        # Calculate error
         spin_error = torch.abs(current_spin - target_spin)
-        rate_reward = is_airborne * torch.exp(-(spin_error**2) / (4.0**2))
         
-        # Optional: "Tuck" Reward (Bend Knees to spin faster)
-        # Penalize straight legs in the air if you want, but rate_reward usually fixes this.
+        # As the task gets harder (target_spin increases), we can loosen the sigma slightly
+        # to prevent frustration, or keep it constant.
+        rate_reward = is_airborne * torch.exp(-(spin_error**2) / (4.0**2))
 
-        # --- 5. REWARD: Landing (Stop Spinning, Upright) ---
-        # Target pitch is effectively 0 (or -2pi).
+        # --- 5. REWARD: Landing ---
         landing_pitch_error = torch.abs(self._wrap_to_pi(current_pitch))
         landing_reward = is_landing * torch.exp(-(landing_pitch_error**2) / 0.5)
         
-        # Penalize horizontal velocity on landing (stick the landing)
+        # Landing Stability (Stop moving horizontally)
         landing_vel_penalty = is_landing * torch.norm(root_lin_vel[:, :2], dim=-1)
         landing_reward *= torch.exp(-landing_vel_penalty / 1.0)
 
@@ -98,11 +97,10 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         action_delta = self._actions - self._previous_actions
         smoothness_penalty = torch.mean(torch.square(action_delta), dim=1)
 
-        # --- Compose Rewards ---
+        # --- 7. Compose ---
         rewards = {
             "takeoff_impulse": takeoff_reward * self.cfg.takeoff_vel_reward_scale,
-            "takeoff_posture": takeoff_posture_reward * 0.5, # New term
-            "backflip_spin": rate_reward * 3.0, # HIGH WEIGHT for spinning
+            "backflip_spin": rate_reward * 3.0, 
             "landing_stability": landing_reward * self.cfg.landing_reward_scale,
             "action_smoothness": -smoothness_penalty * self.cfg.action_smoothness_scale,
         }

@@ -22,6 +22,11 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     action_scale = 0.8
     debug_vis = False
 
+    # CURRICULUM SETTINGS
+    # How many steps to go from "Just Jump" to "Full Backflip"
+    # 5 million steps is a safe, smooth ramp.
+    curriculum_duration_steps: float = 5_000_000.0
+
     # task timing and reward shaping parameters
     flip_period_s: float = 1.6
     takeoff_phase_portion: float = 0.25
@@ -36,6 +41,7 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     takeoff_vel_reward_scale: float = 0.6
     airborne_reward_scale: float = 0.4
     landing_reward_scale: float = 0.7
+    target_flip_speed: float = -8.0
 
     # environment setup
     scene = Rob6323Go2EnvCfg().scene.replace(num_envs=2048, env_spacing=5.0)
