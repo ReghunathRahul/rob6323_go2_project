@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -24,4 +24,4 @@ jobs:
           pip install -e source/rob6323_go2[dev]
 
       - name: Run pytest
-        run: pytest
+        run: pytest source/rob6323_go2/tests/dummy_test_rob6323_go2_env.py

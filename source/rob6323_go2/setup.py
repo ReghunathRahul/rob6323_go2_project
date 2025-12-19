@@ -19,11 +19,16 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 INSTALL_REQUIRES = [
     # NOTE: Add dependencies
     "psutil",
+    "pyyaml",
 ]
 
 EXTRA_REQUIRES = {
     "wandb": ["wandb"],
-    "dev": ["pytest"],
+    "dev": [
+        "pytest",
+        "torch",
+        "omni",
+    ],
 }
 
 # Installation operation
@@ -37,6 +42,7 @@ setup(
     description=EXTENSION_TOML_DATA["package"]["description"],
     keywords=EXTENSION_TOML_DATA["package"]["keywords"],
     install_requires=INSTALL_REQUIRES,
+    extras_require=EXTRA_REQUIRES,
     license="Apache-2.0",
     include_package_data=True,
     python_requires=">=3.10",
