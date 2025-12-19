@@ -22,6 +22,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         self._episode_sums.update({
             "takeoff_power": torch.zeros(self.num_envs, device=self.device),
             "air_spin": torch.zeros(self.num_envs, device=self.device),
+            "air_tuck": torch.zeros(self.num_envs, device=self.device),
             "air_spin_miss": torch.zeros(self.num_envs, device=self.device),
             "land_orient": torch.zeros(self.num_envs, device=self.device),
             "land_still": torch.zeros(self.num_envs, device=self.device),
@@ -50,7 +51,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         
         # Curriculum
         curriculum_factor = torch.clamp(torch.tensor(current_step / self.cfg.curriculum_duration_steps), 0.0, 1.0).to(self.device)
-        target_spin_speed = -6.0 + (curriculum_factor * -6.0) 
+        target_spin_speed = -2.5 + (curriculum_factor * -5.5)
 
         # Phases
         contact_forces = torch.norm(self._contact_sensor.data.net_forces_w_history[:, -1], dim=-1).sum(dim=1)
@@ -67,7 +68,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         vel_z = torch.clamp(root_lin_vel[:, 2], min=0.0)
         takeoff_reward = is_takeoff * vel_z * 2.0
         
-        # Air Spin (Pitch Axis Only)
+        # Air Spin 
         current_spin = root_ang_vel[:, 1]
         
         # Symmetry Penalty 1
@@ -75,7 +76,6 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         non_pitch_penalty = is_airborne * non_pitch_rotation * -2.0
 
         # Symmetry Penalty 2
-        # Forces hips to stay straight (0.0) during takeoff and air.
         abduction_joints = self.robot.data.joint_pos[:, [0, 3, 6, 9]]
         hip_penalty = (~is_landing) * torch.sum(torch.square(abduction_joints), dim=1) * -1.0
 
@@ -83,8 +83,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         spin_miss_penalty = is_airborne * spin_deficit * -1.5
         
         spin_error = torch.clamp(current_spin, max=0.0) - target_spin_speed
-        rate_reward = is_airborne * torch.exp(-(spin_error**2) / 5.0)
-
+        rate_reward = is_airborne * torch.exp(-(spin_error**2) / 10.0)
         # The Gate
         rotation_error = torch.abs(self.cumulative_pitch - (-2 * math.pi))
         rotation_gate = torch.exp(-(rotation_error**2) / 2.0)
@@ -101,12 +100,17 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
                         (self.robot.data.joint_pos > self.robot.data.soft_joint_pos_limits[..., 1])
         joint_limit_penalty = torch.sum(out_of_limits, dim=1).float() * -0.5
 
+        thigh_joints = self.robot.data.joint_pos[:, [1, 4, 7, 10]]
+        tuck_reward = is_airborne * torch.sum(torch.clamp(thigh_joints - 1.0, min=0.0), dim=1) * 0.5
+
         action_smoothness = -torch.mean(torch.square(self._actions - self._previous_actions), dim=1)
 
         rewards = {
-            "takeoff_power": takeoff_reward * 2.0, # [UPDATED] Increased per your request
+            "takeoff_power": takeoff_reward * 2.0, 
             "air_spin": rate_reward * 4.0,
             "air_spin_miss": spin_miss_penalty,
+
+            "air_tuck": tuck_reward,
             
             "non_pitch_penalty": non_pitch_penalty, 
             "hip_penalty": hip_penalty,
