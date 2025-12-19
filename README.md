@@ -217,16 +217,39 @@ Submit the provided automated checks to Burst:
 cd ~/rob6323_go2_project
 ./tests.sh
 ```
+## Actuator Friction Modeling and Domain Randomization
+
+To improve stability and sim-to-real transfer, the environment augments standard PD joint control with a nonlinear actuator friction model and reset-time domain randomization. Joint torques are computed as
+\[
+\tau = K_p (q_d - q) - K_d \dot{q} - \tau_f,
+\]
+with saturation at ±100 Nm, where actuator losses are modeled as
+\[
+\tau_f(\dot{q}) = c_v \dot{q} + c_s \tanh\!\left(\frac{\dot{q}}{v_{\text{tol}}}\right).
+\]
+
+The viscous term captures velocity-dependent losses, while the smooth stiction term approximates static friction breakaway without introducing discontinuous gradients. This prevents the policy from exploiting unrealistically “perfect” joints or learning high-frequency micro-vibrations that would be damaging on real hardware.
+
+At every environment reset, actuator parameters are randomized:
+- viscous friction: `c_v ∼ U(0, 0.3)`
+- stiction friction: `c_s ∼ U(0, 2.5)`
+
+Commanded planar velocities and episode start times are also resampled to avoid synchronized rollouts and simulator-specific exploitation. Together, friction modeling and randomization encourage feedback-driven control policies that remain stable across actuator variability rather than overfitting to nominal dynamics.
+
+## Qualitative Results: Actuator Friction and Randomization
+
+The video below illustrates the effect of nonlinear actuator friction modeling and reset-time domain randomization on learned locomotion behavior.
+
+Specifically, it highlights:
+- Reduced joint chatter and high-frequency oscillations due to stiction modeling
+- Smoother stance-to-swing transitions under randomized actuator parameters
+- Increased robustness to commanded velocity changes compared to friction-free baselines
+
+https://github.com/user-attachments/assets/4353b7ec-4e29-4d57-8a9a-f8f8032b0a8c
 
 ## Training Results and Analysis (Weights & Biases)
 
 All metrics below are logged using Weights & Biases during PPO training on NYU Greene. Each curve corresponds to a separate training run with different random seeds or task configurations.
-
----
-
-## Training Results and Analysis (Weights & Biases)
-
-All metrics below are logged using Weights & Biases during PPO training on NYU Greene.
 
 ---
 
