@@ -1,5 +1,5 @@
 """
-Backflips with Cumulative Pitch Gating + Symmetry Locking (Fixed Hip Logic)
+Backflips with Cumulative Pitch Gating + Symmetry Locking (Fixed Variables)
 """
 
 from __future__ import annotations
@@ -19,15 +19,18 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         self.cumulative_pitch = torch.zeros(self.num_envs, device=self.device)
         self.progress_buf = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         
+        # [FIX] Added 'air_spin_miss' and 'smoothness' so they are logged correctly
         self._episode_sums.update({
             "takeoff_power": torch.zeros(self.num_envs, device=self.device),
             "air_spin": torch.zeros(self.num_envs, device=self.device),
+            "air_spin_miss": torch.zeros(self.num_envs, device=self.device), # Added
             "land_orient": torch.zeros(self.num_envs, device=self.device),
             "land_still": torch.zeros(self.num_envs, device=self.device),
             "rotation_gate": torch.zeros(self.num_envs, device=self.device),
             "joint_limits": torch.zeros(self.num_envs, device=self.device),
             "non_pitch_penalty": torch.zeros(self.num_envs, device=self.device),
             "hip_penalty": torch.zeros(self.num_envs, device=self.device),
+            "smoothness": torch.zeros(self.num_envs, device=self.device),    # Added
         })
 
     def _get_observations(self) -> dict:
@@ -101,12 +104,12 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         action_smoothness = -torch.mean(torch.square(self._actions - self._previous_actions), dim=1)
 
         rewards = {
-            "takeoff_power": takeoff_reward * 1.0,
+            "takeoff_power": takeoff_reward * 1.5,
             "air_spin": rate_reward * 4.0,
             "air_spin_miss": spin_miss_penalty,
             
             "non_pitch_penalty": non_pitch_penalty, 
-            "hip_penalty": hip_penalty,          # Now safe for landing!
+            "hip_penalty": hip_penalty,
             
             "land_orient": land_orient_reward * 2.0,
             "land_still": land_still_reward * 1.0,
