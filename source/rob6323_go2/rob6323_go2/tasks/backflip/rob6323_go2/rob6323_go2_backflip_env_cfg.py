@@ -22,8 +22,12 @@ from rob6323_go2.tasks.direct.rob6323_go2.rob6323_go2_env_cfg import Rob6323Go2E
 class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     # env
     decimation = 4
-    episode_length_s = 1.2
-    flip_period_s = 0.9
+    
+    # [CRITICAL] 6.0 seconds allows the full "2-3s Takeoff + 2s Flip" sequence
+    episode_length_s = 6.0
+    
+    # Cycle logic syncs to 5.0s to allow the "Standing Still" reward at the end
+    flip_period_s = 5.0
 
     # spaces definition
     action_scale = 1.0
@@ -33,9 +37,9 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     debug_vis = False
 
     # PD controller
-    Kp = 60.0
-    Kd = 5.0
-    torque_limits = 100.0
+    Kp = 20.0
+    Kd = 0.5
+    torque_limits = 45.0
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -92,9 +96,12 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     # reward scales
     curriculum_duration_steps = 5_000_000.0
     
-    takeoff_phase_portion = 0.25
-    airborne_phase_start = 0.25
-    airborne_phase_end = 0.75
+    # [PHASE MATCHING]
+    # Aligned to the Environment File logic
+    takeoff_phase_portion = 0.2
+    airborne_phase_start = 0.5
+    airborne_phase_end = 0.8
+    
     flip_pitch_sigma = 0.5
     air_contact_force_limit = 120.0
     landing_pitch_sigma = 0.25

@@ -1,5 +1,5 @@
 """
-Backflips with Cumulative Pitch Gating + Symmetry Locking + High Power
+Backflips (Aggressive Flowchart Tuned)
 """
 
 from __future__ import annotations
@@ -49,16 +49,17 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         # Update Pitch
         self.cumulative_pitch += self.robot.data.root_ang_vel_b[:, 1] * self.step_dt
         
-        # Curriculum
+        # Curriculum: Ramps up target speed
         curriculum_factor = torch.clamp(torch.tensor(current_step / self.cfg.curriculum_duration_steps), 0.0, 1.0).to(self.device)
-        target_spin_speed = -2.5 + (curriculum_factor * -5.5)
+        target_spin_speed = -2.5 + (curriculum_factor * -5.5) 
 
         # Phases
         contact_forces = torch.norm(self._contact_sensor.data.net_forces_w_history[:, -1], dim=-1).sum(dim=1)
         is_contact = contact_forces > 1.0
         
-        is_airborne = (~is_contact) & (phase > 0.15) & (phase < 0.85)
-        is_landing = (phase > 0.8) & is_contact
+        # Using config phase definitions to match the 6.0s timeline
+        is_airborne = (~is_contact) & (phase > self.cfg.airborne_phase_start) & (phase < self.cfg.airborne_phase_end)
+        is_landing = (phase > self.cfg.airborne_phase_end) & is_contact
         is_takeoff = phase < 0.2
 
         root_lin_vel = self.robot.data.root_lin_vel_w
@@ -68,22 +69,27 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         vel_z = torch.clamp(root_lin_vel[:, 2], min=0.0)
         takeoff_reward = is_takeoff * vel_z * 2.0
         
-        # Air Spin 
+        # Air Spin
         current_spin = root_ang_vel[:, 1]
         
-        # Symmetry Penalty 1
+        # Symmetry Penalties
         non_pitch_rotation = torch.sum(torch.square(root_ang_vel[:, [0, 2]]), dim=1)
         non_pitch_penalty = is_airborne * non_pitch_rotation * -2.0
 
-        # Symmetry Penalty 2
         abduction_joints = self.robot.data.joint_pos[:, [0, 3, 6, 9]]
         hip_penalty = (~is_landing) * torch.sum(torch.square(abduction_joints), dim=1) * -1.0
 
-        spin_deficit = torch.clamp(current_spin - (-4.0), min=0.0)
+        # Spin Logic
+        spin_deficit = torch.clamp(current_spin - (-3.0), min=0.0)
         spin_miss_penalty = is_airborne * spin_deficit * -1.5
         
         spin_error = torch.clamp(current_spin, max=0.0) - target_spin_speed
-        rate_reward = is_airborne * torch.exp(-(spin_error**2) / 10.0)
+        rate_reward = is_airborne * torch.exp(-(spin_error**2) / 10.0) 
+
+        # Tuck Reward (Bend knees to spin faster)
+        thigh_joints = self.robot.data.joint_pos[:, [1, 4, 7, 10]]
+        tuck_reward = is_airborne * torch.sum(torch.clamp(thigh_joints - 1.0, min=0.0), dim=1) * 0.5
+
         # The Gate
         rotation_error = torch.abs(self.cumulative_pitch - (-2 * math.pi))
         rotation_gate = torch.exp(-(rotation_error**2) / 2.0)
@@ -100,23 +106,22 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
                         (self.robot.data.joint_pos > self.robot.data.soft_joint_pos_limits[..., 1])
         joint_limit_penalty = torch.sum(out_of_limits, dim=1).float() * -0.5
 
-        thigh_joints = self.robot.data.joint_pos[:, [1, 4, 7, 10]]
-        tuck_reward = is_airborne * torch.sum(torch.clamp(thigh_joints - 1.0, min=0.0), dim=1) * 0.5
-
         action_smoothness = -torch.mean(torch.square(self._actions - self._previous_actions), dim=1)
 
+        
         rewards = {
-            "takeoff_power": takeoff_reward * 2.0, 
-            "air_spin": rate_reward * 4.0,
-            "air_spin_miss": spin_miss_penalty,
-
+            "takeoff_power": takeoff_reward * 25.0,  
+            "air_spin": rate_reward * 10.0,          
+            
             "air_tuck": tuck_reward,
+            "air_spin_miss": spin_miss_penalty,
             
             "non_pitch_penalty": non_pitch_penalty, 
             "hip_penalty": hip_penalty,
             
-            "land_orient": land_orient_reward * 2.0,
+            "land_orient": land_orient_reward * 10.0, # Was 2.0, now 10.0 (Diagram: 'orientation')
             "land_still": land_still_reward * 1.0,
+            
             "joint_limits": joint_limit_penalty,
             "smoothness": action_smoothness * 0.05,
         }
