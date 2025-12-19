@@ -1,5 +1,5 @@
 """
-Backflips with Cumulative Pitch Gating + Symmetry Locking (Fixed Variables)
+Backflips with Cumulative Pitch Gating + Symmetry Locking + High Power
 """
 
 from __future__ import annotations
@@ -19,18 +19,17 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         self.cumulative_pitch = torch.zeros(self.num_envs, device=self.device)
         self.progress_buf = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         
-        # [FIX] Added 'air_spin_miss' and 'smoothness' so they are logged correctly
         self._episode_sums.update({
             "takeoff_power": torch.zeros(self.num_envs, device=self.device),
             "air_spin": torch.zeros(self.num_envs, device=self.device),
-            "air_spin_miss": torch.zeros(self.num_envs, device=self.device), # Added
+            "air_spin_miss": torch.zeros(self.num_envs, device=self.device),
             "land_orient": torch.zeros(self.num_envs, device=self.device),
             "land_still": torch.zeros(self.num_envs, device=self.device),
             "rotation_gate": torch.zeros(self.num_envs, device=self.device),
             "joint_limits": torch.zeros(self.num_envs, device=self.device),
             "non_pitch_penalty": torch.zeros(self.num_envs, device=self.device),
             "hip_penalty": torch.zeros(self.num_envs, device=self.device),
-            "smoothness": torch.zeros(self.num_envs, device=self.device),    # Added
+            "smoothness": torch.zeros(self.num_envs, device=self.device),
         })
 
     def _get_observations(self) -> dict:
@@ -68,7 +67,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         vel_z = torch.clamp(root_lin_vel[:, 2], min=0.0)
         takeoff_reward = is_takeoff * vel_z * 2.0
         
-        # Air Spin (Pitch Only)
+        # Air Spin (Pitch Axis Only)
         current_spin = root_ang_vel[:, 1]
         
         # Symmetry Penalty 1
@@ -76,6 +75,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         non_pitch_penalty = is_airborne * non_pitch_rotation * -2.0
 
         # Symmetry Penalty 2
+        # Forces hips to stay straight (0.0) during takeoff and air.
         abduction_joints = self.robot.data.joint_pos[:, [0, 3, 6, 9]]
         hip_penalty = (~is_landing) * torch.sum(torch.square(abduction_joints), dim=1) * -1.0
 
@@ -104,7 +104,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         action_smoothness = -torch.mean(torch.square(self._actions - self._previous_actions), dim=1)
 
         rewards = {
-            "takeoff_power": takeoff_reward * 1.5,
+            "takeoff_power": takeoff_reward * 2.0, # [UPDATED] Increased per your request
             "air_spin": rate_reward * 4.0,
             "air_spin_miss": spin_miss_penalty,
             
