@@ -220,13 +220,15 @@ cd ~/rob6323_go2_project
 ## Actuator Friction Modeling and Domain Randomization
 
 To improve stability and sim-to-real transfer, the environment augments standard PD joint control with a nonlinear actuator friction model and reset-time domain randomization. Joint torques are computed as
-\[
-\tau = K_p (q_d - q) - K_d \dot{q} - \tau_f,
-\]
+
+τ = Kp (qd − q) − Kd q̇ − τf,
+
 with saturation at ±100 Nm, where actuator losses are modeled as
-\[
-\tau_f(\dot{q}) = c_v \dot{q} + c_s \tanh\!\left(\frac{\dot{q}}{v_{\text{tol}}}\right).
-\]
+
+τf(q̇) = cv q̇ + cs tanh(q̇ / v_tol).
+
+The viscous term captures velocity-dependent losses, while the smooth stiction term approximates static friction breakaway without introducing discontinuous gradients. This prevents the policy from exploiting unrealistically “perfect” joints or learning high-frequency micro-vibrations that would be damaging on real hardware.
+
 
 The viscous term captures velocity-dependent losses, while the smooth stiction term approximates static friction breakaway without introducing discontinuous gradients. This prevents the policy from exploiting unrealistically “perfect” joints or learning high-frequency micro-vibrations that would be damaging on real hardware.
 
