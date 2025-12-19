@@ -1,5 +1,5 @@
 """
-Backflips with Cumulative Pitch Gating (Final Fixed Version)
+Backflips with Cumulative Pitch Gating + Symmetry Locking (Fixed Hip Logic)
 """
 
 from __future__ import annotations
@@ -16,18 +16,18 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
     def __init__(self, cfg: Rob6323Go2BackflipEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         
-        # Track cumulative pitch for the Gate
         self.cumulative_pitch = torch.zeros(self.num_envs, device=self.device)
         self.progress_buf = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         
-        # Initialize logging
         self._episode_sums.update({
             "takeoff_power": torch.zeros(self.num_envs, device=self.device),
             "air_spin": torch.zeros(self.num_envs, device=self.device),
-            "air_spin_miss": torch.zeros(self.num_envs, device=self.device),
             "land_orient": torch.zeros(self.num_envs, device=self.device),
             "land_still": torch.zeros(self.num_envs, device=self.device),
             "rotation_gate": torch.zeros(self.num_envs, device=self.device),
+            "joint_limits": torch.zeros(self.num_envs, device=self.device),
+            "non_pitch_penalty": torch.zeros(self.num_envs, device=self.device),
+            "hip_penalty": torch.zeros(self.num_envs, device=self.device),
         })
 
     def _get_observations(self) -> dict:
@@ -38,8 +38,7 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         return obs
 
     def _get_rewards(self) -> torch.Tensor:
-        
-        self.progress_buf += 1
+        self.progress_buf += 1 
         
         phase = self._compute_phase()
         current_step = self.common_step_counter
@@ -55,7 +54,6 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         contact_forces = torch.norm(self._contact_sensor.data.net_forces_w_history[:, -1], dim=-1).sum(dim=1)
         is_contact = contact_forces > 1.0
         
-        # Phase window checks
         is_airborne = (~is_contact) & (phase > 0.15) & (phase < 0.85)
         is_landing = (phase > 0.8) & is_contact
         is_takeoff = phase < 0.2
@@ -63,19 +61,24 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         root_lin_vel = self.robot.data.root_lin_vel_w
         root_ang_vel = self.robot.data.root_ang_vel_b
 
-        
-
         # Takeoff
         vel_z = torch.clamp(root_lin_vel[:, 2], min=0.0)
         takeoff_reward = is_takeoff * vel_z * 2.0
         
-        # Air Spin
+        # Air Spin (Pitch Only)
         current_spin = root_ang_vel[:, 1]
         
+        # Symmetry Penalty 1
+        non_pitch_rotation = torch.sum(torch.square(root_ang_vel[:, [0, 2]]), dim=1)
+        non_pitch_penalty = is_airborne * non_pitch_rotation * -2.0
+
+        # Symmetry Penalty 2
+        abduction_joints = self.robot.data.joint_pos[:, [0, 3, 6, 9]]
+        hip_penalty = (~is_landing) * torch.sum(torch.square(abduction_joints), dim=1) * -1.0
+
         spin_deficit = torch.clamp(current_spin - (-4.0), min=0.0)
-        spin_miss_penalty = is_airborne * spin_deficit * -1.0
+        spin_miss_penalty = is_airborne * spin_deficit * -1.5
         
-        # Reward
         spin_error = torch.clamp(current_spin, max=0.0) - target_spin_speed
         rate_reward = is_airborne * torch.exp(-(spin_error**2) / 5.0)
 
@@ -90,15 +93,25 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         vel_xy = torch.norm(root_lin_vel[:, :2], dim=-1)
         land_still_reward = is_landing * rotation_gate * torch.exp(-vel_xy / 1.0)
         
+        # Joint Limits
+        out_of_limits = (self.robot.data.joint_pos < self.robot.data.soft_joint_pos_limits[..., 0]) | \
+                        (self.robot.data.joint_pos > self.robot.data.soft_joint_pos_limits[..., 1])
+        joint_limit_penalty = torch.sum(out_of_limits, dim=1).float() * -0.5
+
         action_smoothness = -torch.mean(torch.square(self._actions - self._previous_actions), dim=1)
 
         rewards = {
             "takeoff_power": takeoff_reward * 1.0,
             "air_spin": rate_reward * 4.0,
             "air_spin_miss": spin_miss_penalty,
+            
+            "non_pitch_penalty": non_pitch_penalty, 
+            "hip_penalty": hip_penalty,          # Now safe for landing!
+            
             "land_orient": land_orient_reward * 2.0,
             "land_still": land_still_reward * 1.0,
-            "smoothness": action_smoothness * 0.1
+            "joint_limits": joint_limit_penalty,
+            "smoothness": action_smoothness * 0.05,
         }
 
         for k, v in rewards.items():
@@ -111,9 +124,8 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         super()._reset_idx(env_ids)
         if env_ids is None: env_ids = self.robot._ALL_INDICES
         
-        # Reset counters
         self.cumulative_pitch[env_ids] = 0.0
-        self.progress_buf[env_ids] = 0  # Reset phase timer
+        self.progress_buf[env_ids] = 0
         
         if "episode" not in self.extras: self.extras["episode"] = {}
         for k in self._episode_sums.keys():
