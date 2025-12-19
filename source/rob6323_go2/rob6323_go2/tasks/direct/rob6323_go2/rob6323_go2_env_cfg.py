@@ -118,4 +118,4 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     stiction_vel_tol = 0.1
 
     # termination
-    base_height_min = 0.20
+    base_height_min = 0.05
