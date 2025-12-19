@@ -217,3 +217,94 @@ Submit the provided automated checks to Burst:
 cd ~/rob6323_go2_project
 ./tests.sh
 ```
+
+## Training Results and Analysis (Weights & Biases)
+
+All metrics below are logged using Weights & Biases during PPO training on NYU Greene. Each curve corresponds to a separate training run with different random seeds or task configurations.
+
+---
+
+### Mean Episode Length
+
+![Mean Episode Length](docs/report/figs/train_mean_episode_length.png)
+
+**Interpretation:**  
+The best-performing run shows a steady increase in mean episode length, eventually saturating near the episode time limit. This indicates that the policy learns to remain upright and stable for longer durations without triggering termination conditions such as base collisions or excessive tilt. Runs with flat or declining curves correspond to unstable policies that terminate early.
+
+This directly reflects improved balance, contact timing, and gait stability induced by reward shaping and actuator randomization.
+
+---
+
+### Mean Episode Reward
+
+![Mean Episode Reward](docs/report/figs/train_mean_reward.png)
+
+**Interpretation:**  
+The increasing reward curve for the successful run indicates consistent improvement in velocity tracking, gait coordination, and smoothness. Runs that remain near zero or negative rewards correspond to failed training attempts where the policy does not learn a viable locomotion strategy.
+
+The divergence between runs highlights sensitivity to initialization and confirms the necessity of gait-aware shaping and action regularization.
+
+---
+
+### Learning Rate Schedule
+
+![Learning Rate](docs/report/figs/loss_learning_rate.png)
+
+**Interpretation:**  
+The adaptive learning rate schedule used by PPO reduces the learning rate as training progresses. Early spikes correspond to exploration and large policy updates, while later stabilization indicates convergence toward a locally optimal policy.
+
+This behavior matches the configured adaptive PPO optimizer in `rsl_rl_ppo_cfg.py`.
+
+---
+
+### Episode Termination: Time-Out
+
+![Termination Time-Out](docs/report/figs/episode_termination_timeout.png)
+
+**Interpretation:**  
+An increasing proportion of episodes ending due to time-out (rather than failure) indicates successful locomotion. Once the policy consistently survives until the episode horizon, time-out becomes the dominant termination mode, confirming stability.
+
+---
+
+### Velocity Tracking Reward
+
+![Velocity Tracking Reward](docs/report/figs/track_lin_vel_xy_exp.png)
+
+**Interpretation:**  
+The exponential velocity tracking reward rapidly increases and plateaus, indicating that the policy quickly learns to match commanded planar velocities. The stable plateau demonstrates reliable command following across long horizons.
+
+This aligns with the reward formulation  
+`exp(-||v_xy - v_xy_cmd||^2 / 0.25)` implemented in the environment.
+
+---
+
+### Action Smoothness Reward
+
+![Action Smoothness](docs/report/figs/action_smoothness.png)
+
+**Interpretation:**  
+The initially large penalty reflects high-frequency, unstable joint commands early in training. Over time, the penalty magnitude decreases, showing that the policy learns smoother joint trajectories due to first- and second-order action difference penalties.
+
+This directly validates the effectiveness of action-rate regularization.
+
+---
+
+### Backflip Task: Takeoff Impulse Reward
+
+![Takeoff Impulse](docs/report/figs/takeoff_impulse.png)
+
+**Interpretation:**  
+For the backflip task, the steadily increasing takeoff impulse reward indicates that the policy learns to generate sufficient vertical impulse and coordinated joint motion required for liftoff. This confirms that task-specific reward shaping successfully guides highly dynamic behaviors.
+
+---
+
+## Summary
+
+Together, these plots demonstrate:
+- Stable PPO convergence
+- Improved gait stability and episode survivability
+- Effective velocity tracking
+- Reduced action chattering
+- Successful task-specific learning (e.g., backflip takeoff)
+
+These results validate the reward design, actuator modeling, and training pipeline implemented in the repository.
