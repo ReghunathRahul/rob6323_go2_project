@@ -249,6 +249,13 @@ Specifically, it highlights:
 
 https://github.com/user-attachments/assets/4353b7ec-4e29-4d57-8a9a-f8f8032b0a8c
 
+Dance video:
+
+
+https://github.com/user-attachments/assets/cc3d4eb4-1ffd-4384-a7e1-0350a0413816
+
+
+
 ## Training Results and Analysis (Weights & Biases)
 
 All metrics below are logged using Weights & Biases during PPO training on NYU Greene. Each curve corresponds to a separate training run with different random seeds or task configurations.
