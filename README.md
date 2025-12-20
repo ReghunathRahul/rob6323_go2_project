@@ -217,3 +217,80 @@ Submit the provided automated checks to Burst:
 cd ~/rob6323_go2_project
 ./tests.sh
 ```
+## Actuator Friction Modeling and Domain Randomization
+
+To improve stability and sim-to-real transfer, the environment augments standard PD joint control with a nonlinear actuator friction model and reset-time domain randomization. Joint torques are computed as
+
+τ = Kp (qd − q) − Kd q̇ − τf,
+
+with saturation at ±100 Nm, where actuator losses are modeled as
+
+τf(q̇) = cv q̇ + cs tanh(q̇ / v_tol).
+
+The viscous term captures velocity-dependent losses, while the smooth stiction term approximates static friction breakaway without introducing discontinuous gradients. This prevents the policy from exploiting unrealistically “perfect” joints or learning high-frequency micro-vibrations that would be damaging on real hardware.
+
+
+The viscous term captures velocity-dependent losses, while the smooth stiction term approximates static friction breakaway without introducing discontinuous gradients. This prevents the policy from exploiting unrealistically “perfect” joints or learning high-frequency micro-vibrations that would be damaging on real hardware.
+
+At every environment reset, actuator parameters are randomized:
+- viscous friction: `c_v ∼ U(0, 0.3)`
+- stiction friction: `c_s ∼ U(0, 2.5)`
+
+Commanded planar velocities and episode start times are also resampled to avoid synchronized rollouts and simulator-specific exploitation. Together, friction modeling and randomization encourage feedback-driven control policies that remain stable across actuator variability rather than overfitting to nominal dynamics.
+
+## Output: Direct Locomotion Task (Friction walk)
+
+The video below illustrates the effect of nonlinear actuator friction modeling and reset-time domain randomization on learned locomotion behavior.
+
+Specifically, it highlights:
+- Reduced joint chatter and high-frequency oscillations due to stiction modeling
+- Smoother stance-to-swing transitions under randomized actuator parameters
+- Increased robustness to commanded velocity changes compared to friction-free baselines
+
+https://github.com/user-attachments/assets/ecd55020-9b3e-4650-af72-71105f8f8c9e
+
+## Output: Coordinated Jumping (“Happy Dance”) Behavior
+
+In addition to steady locomotion, a separate task variant trains short-duration coordinated vertical motion from a near-stationary stance. Rewards emphasize synchronized leg extension, positive vertical base velocity during takeoff, and safe landing without base–ground contact. Unlike walking, jumping relies on sparse and temporally localized rewards, requiring precise timing and symmetry across all four legs.
+
+The resulting behavior is demonstrated in Video 2, showing coordinated leg extension, a brief aerial phase, and controlled landing, consistent with the analysis in Section V of the report.
+
+https://github.com/user-attachments/assets/cc3d4eb4-1ffd-4384-a7e1-0350a0413816
+
+
+## Training Results and Analysis (Weights & Biases)
+
+All metrics below are logged using Weights & Biases during PPO training on NYU Greene.
+Curves correspond to successful training runs for direct locomotion and gait stabilization.
+### Velocity Tracking Performance
+
+![Planar Velocity Tracking](docs/img/track_linear_vel_xy_exp.png)
+![Yaw-Rate Tracking](docs/img/track_ang_vel_z_exp.png)
+
+**Interpretation:**  
+Planar linear and yaw-rate tracking rewards converge rapidly within early training iterations, indicating fast acquisition of accurate command-following behavior. After convergence, improvements primarily refine gait stability rather than tracking accuracy, consistent with the analysis in Section V-A of the report.
+
+### Gait Stability and Contact Quality
+
+![Raibert Foot-Placement Penalty](docs/img/rew_raibert_heuristic.png)
+![Stance Contact Reward](docs/img/rew_stance_contact.png)
+![Base Contact Terminations](docs/img/base_contact.png)
+
+**Interpretation:**  
+The Raibert foot-placement penalty stabilizes as coordinated stepping emerges, while stance contact rewards increase with improved foot–ground consistency. Base-contact terminations decay toward zero, indicating successful avoidance of catastrophic failures such as base–ground collisions and confirming robust gait stabilization.
+
+
+---
+
+## Summary
+
+These results demonstrate:
+- Stable PPO convergence with increasing episode survivability
+- Accurate planar velocity and yaw-rate tracking
+- Improved gait coordination via Raibert-based shaping
+- Reduced joint chatter through action-rate regularization
+- Robust contact timing and failure avoidance
+- Successful extension of the same RL framework to coordinated jumping behavior
+
+Together, the figures and videos validate the reward design, actuator modeling, and training pipeline described in the accompanying report.
+
