@@ -383,7 +383,7 @@ class Rob6323Go2Env(DirectRLEnv):
         return arrow_scale, arrow_quat
     
     def _step_contact_targets(self):
-        frequencies = 3.
+        frequencies = 2.5
         phases = 0.5
         offsets = 0.
         bounds = 0.
