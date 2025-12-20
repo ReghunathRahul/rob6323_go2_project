@@ -108,8 +108,8 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     tracking_contacts_shaped_force_reward_scale = 4.0
 
     # PD controller
-    Kp = 15.0
-    Kd = 1.0
+    Kp = 20.0
+    Kd = 0.6
     torque_limits = 100.0
 
     # actuator friction randomization
