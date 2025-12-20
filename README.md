@@ -238,7 +238,7 @@ At every environment reset, actuator parameters are randomized:
 
 Commanded planar velocities and episode start times are also resampled to avoid synchronized rollouts and simulator-specific exploitation. Together, friction modeling and randomization encourage feedback-driven control policies that remain stable across actuator variability rather than overfitting to nominal dynamics.
 
-## Qualitative Results: Direct Locomotion Task (Friction walk)
+## Output: Direct Locomotion Task (Friction walk)
 
 The video below illustrates the effect of nonlinear actuator friction modeling and reset-time domain randomization on learned locomotion behavior.
 
@@ -249,7 +249,7 @@ Specifically, it highlights:
 
 https://github.com/user-attachments/assets/4353b7ec-4e29-4d57-8a9a-f8f8032b0a8c
 
-### Coordinated Jumping (“Happy Dance”) Behavior
+## Output: Coordinated Jumping (“Happy Dance”) Behavior
 
 In addition to steady locomotion, a separate task variant trains short-duration coordinated vertical motion from a near-stationary stance. Rewards emphasize synchronized leg extension, positive vertical base velocity during takeoff, and safe landing without base–ground contact. Unlike walking, jumping relies on sparse and temporally localized rewards, requiring precise timing and symmetry across all four legs.
 
