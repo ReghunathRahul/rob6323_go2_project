@@ -208,7 +208,7 @@ Authors are with New York University - Tandon School of Engineering
 Launch PPO training and automated evaluation from Greene. You may override `TASK_NAME` or pass extra flags to `scripts/rsl_rl/train.py` via `train.sh`.
 ```bash
 cd ~/rob6323_go2_project
-TASK_NAME=Template-Rob6323-Go2-<Direct|Backflip|RobustLocomotion|Bipedal>-v0 ./train.sh --experiment_name go2_<flat_direct|backflip|robust_localmotion|bipedal> --max_iterations 1000
+TASK_NAME=Template-Rob6323-Go2-<Direct|Backflip|RobustLocomotion|Bipedal>-v0 ./train.sh --experiment_name go2_<flat_direct|backflip|robust_localmotion|bipedal> --logger wandb
 ```
 
 ## Running tests
