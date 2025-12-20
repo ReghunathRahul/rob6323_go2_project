@@ -109,7 +109,7 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
 
     # PD controller
     Kp = 20.0
-    Kd = 0.5
+    Kd = 0.6
     torque_limits = 100.0
 
     # actuator friction randomization
