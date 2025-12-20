@@ -7,6 +7,8 @@ import gymnasium as gym
 
 from .rob6323_go2_backflip_env import Rob6323Go2BackflipEnv
 from .rob6323_go2_backflip_env_cfg import Rob6323Go2BackflipEnvCfg
+from .rob6323_go2_jump_env import Rob6323Go2jumpEnv
+from .rob6323_go2_jump_env_cfg import Rob6323Go2jumpEnvCfg
 
 __all__ = [
     "rob6323go2backflipenv",

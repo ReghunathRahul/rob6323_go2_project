@@ -13,12 +13,12 @@ import isaaclab.utils.math as math_utils
 
 from rob6323_go2.tasks.direct.rob6323_go2.rob6323_go2_env import Rob6323Go2Env
 
-from .rob6323_go2_backflip_env_cfg import Rob6323Go2jumpEnvCfg
+from .rob6323_go2_jump_env_cfg import Rob6323Go2jumpEnvCfg
 
 
 class Rob6323Go2jumpEnv(Rob6323Go2Env):
     """
-    Task for training periodic backflips.
+    Task for training periodic jumps.
     """
 
     cfg: Rob6323Go2jumpEnvCfg
@@ -28,10 +28,10 @@ class Rob6323Go2jumpEnv(Rob6323Go2Env):
         self.progress_buf = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         self._episode_sums.update(
             {
-                "backflip_orientation": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "backflip_takeoff": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "backflip_airborne": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
-                "backflip_landing": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "jump_orientation": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "jump_takeoff": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "jump_airborne": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
+                "jump_landing": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
                 "action_smoothness_penalty": torch.zeros(self.num_envs, dtype=torch.float, device=self.device),
             }
         )
@@ -92,12 +92,12 @@ class Rob6323Go2jumpEnv(Rob6323Go2Env):
 
         rewards = {
             # Scale orientation down so it doesn't dominate
-            "backflip_orientation": orientation_reward * 1.0, 
+            "jump_orientation": orientation_reward * 1.0, 
             # Scale rate UP to force the spin
-            "backflip_rate": rate_reward * 2.0,
-            "backflip_takeoff": takeoff_reward * self.cfg.takeoff_vel_reward_scale,
-            "backflip_airborne": airborne_reward * self.cfg.airborne_reward_scale,
-            "backflip_landing": landing_reward * self.cfg.landing_reward_scale,
+            "jump_rate": rate_reward * 2.0,
+            "jump_takeoff": takeoff_reward * self.cfg.takeoff_vel_reward_scale,
+            "jump_airborne": airborne_reward * self.cfg.airborne_reward_scale,
+            "jump_landing": landing_reward * self.cfg.landing_reward_scale,
             "action_smoothness_penalty": -smoothness_penalty * self.cfg.action_smoothness_scale,
         }
 
