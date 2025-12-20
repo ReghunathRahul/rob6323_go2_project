@@ -15,12 +15,12 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     """
 
     # shorter episodes for a clean flip and landing rather than locomotion.
-    episode_length_s = 1.5
+    episode_length_s = 2.0
 
     # add features (sin/cos) to help the policy track where it is in flip.
     observation_space = Rob6323Go2EnvCfg().observation_space + 2
 
-    action_scale = 0.8
+    action_scale = 0.5
     debug_vis = False
 
     # task timing and reward shaping parameters

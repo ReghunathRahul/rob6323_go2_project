@@ -1,3 +1,4 @@
+
 """
 Backflips!
 """
@@ -44,56 +45,49 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
         observations["policy"] = torch.cat([observations["policy"], phase_features], dim=-1)
         return observations
 
-    def _get_rewards(self) -> torch.Tensor:
+    def _get_rewards(self,
+    ) -> torch.Tensor:
         phase = self._compute_phase()
-        
+        target_pitch = -2 * math.pi * phase
 
-        is_takeoff = phase < self.cfg.takeoff_phase_portion
-        is_airborne = (phase >= self.cfg.airborne_phase_start) & (phase <= self.cfg.airborne_phase_end)
-        is_landing = phase > self.cfg.airborne_phase_end
+        # stay close to the pitch target
+        _, current_pitch, _ = math_utils.euler_xyz_from_quat(self.robot.data.root_quat_w)
+        pitch_error = self._wrap_to_pi(current_pitch - target_pitch)
+        orientation_reward = torch.exp(-(pitch_error**2) / (self.cfg.flip_pitch_sigma**2))
 
-        root_quat = self.robot.data.root_quat_w
-        root_lin_vel = self.robot.data.root_lin_vel_w
-        root_ang_vel = self.robot.data.root_ang_vel_b
-        _, current_pitch, _ = math_utils.euler_xyz_from_quat(root_quat)
+        # reward upward momentum during the takeoff
+        takeoff_mask = phase < self.cfg.takeoff_phase_portion
+        vertical_velocity = torch.clamp(self.robot.data.root_lin_vel_w[:, 2], min=0.0)
+        takeoff_reward = takeoff_mask * vertical_velocity
 
-        vertical_vel = torch.clamp(root_lin_vel[:, 2], min=0.0)
-        takeoff_reward = is_takeoff * vertical_vel * 1.5  # Boost takeoff
+        # use contact forces to encourage being airborne during the mid
+        contact_forces = self._contact_sensor.data.net_forces_w_history[:, -1]
+        contact_force_sum = torch.sum(torch.norm(contact_forces, dim=-1), dim=1)
+        airborne_phase = (phase >= self.cfg.airborne_phase_start) & (phase <= self.cfg.airborne_phase_end)
+        airborne_reward = airborne_phase * torch.exp(-contact_force_sum / (self.cfg.air_contact_force_limit + 1e-6))
 
-        takeoff_posture_error = torch.abs(self._wrap_to_pi(current_pitch))
-        takeoff_posture_reward = is_takeoff * torch.exp(-(takeoff_posture_error**2) / 0.5)
-
-        target_spin = -8.0 
-        current_spin = root_ang_vel[:, 1] 
-    
-        spin_error = torch.abs(current_spin - target_spin)
-        rate_reward = is_airborne * torch.exp(-(spin_error**2) / (4.0**2))
-        
-
+        # reward landing upright with low forces
+        landing_phase = phase > self.cfg.airborne_phase_end
         landing_pitch_error = torch.abs(self._wrap_to_pi(current_pitch))
-        landing_reward = is_landing * torch.exp(-(landing_pitch_error**2) / 0.5)
- 
-        landing_vel_penalty = is_landing * torch.norm(root_lin_vel[:, :2], dim=-1)
-        landing_reward *= torch.exp(-landing_vel_penalty / 1.0)
+        landing_reward = landing_phase * torch.exp(-(landing_pitch_error**2) / (self.cfg.landing_pitch_sigma**2))
+        landing_reward *= torch.exp(-contact_force_sum / (self.cfg.landing_force_sigma + 1e-6))
 
+        # penalize aggressive action changes to keep flips controllable
         action_delta = self._actions - self._previous_actions
         smoothness_penalty = torch.mean(torch.square(action_delta), dim=1)
 
         rewards = {
-            "takeoff_impulse": takeoff_reward * self.cfg.takeoff_vel_reward_scale,
-            "takeoff_posture": takeoff_posture_reward * 0.5, # New term
-            "backflip_spin": rate_reward * 3.0, # HIGH WEIGHT for spinning
-            "landing_stability": landing_reward * self.cfg.landing_reward_scale,
-            "action_smoothness": -smoothness_penalty * self.cfg.action_smoothness_scale,
+            "backflip_orientation": orientation_reward * self.cfg.orientation_reward_scale,
+            "backflip_takeoff": takeoff_reward * self.cfg.takeoff_vel_reward_scale,
+            "backflip_airborne": airborne_reward * self.cfg.airborne_reward_scale,
+            "backflip_landing": landing_reward * self.cfg.landing_reward_scale,
+            "action_smoothness_penalty": -smoothness_penalty * self.cfg.action_smoothness_scale,
         }
 
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
 
         for key, value in rewards.items():
-             if key not in self._episode_sums:
-                self._episode_sums[key] = torch.zeros_like(value)
-             self._episode_sums[key] += value
-             
+            self._episode_sums[key] += value
         return reward
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
