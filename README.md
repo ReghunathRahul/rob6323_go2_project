@@ -238,7 +238,7 @@ At every environment reset, actuator parameters are randomized:
 
 Commanded planar velocities and episode start times are also resampled to avoid synchronized rollouts and simulator-specific exploitation. Together, friction modeling and randomization encourage feedback-driven control policies that remain stable across actuator variability rather than overfitting to nominal dynamics.
 
-## Qualitative Results: Actuator Friction and Randomization
+## Qualitative Results: Direct Locomotion Task (Friction walk)
 
 The video below illustrates the effect of nonlinear actuator friction modeling and reset-time domain randomization on learned locomotion behavior.
 
@@ -249,82 +249,50 @@ Specifically, it highlights:
 
 https://github.com/user-attachments/assets/4353b7ec-4e29-4d57-8a9a-f8f8032b0a8c
 
-Dance video:
+### Coordinated Jumping (“Happy Dance”) Behavior
+
+In addition to steady locomotion, a separate task variant trains short-duration coordinated vertical motion from a near-stationary stance. Rewards emphasize synchronized leg extension, positive vertical base velocity during takeoff, and safe landing without base–ground contact. Unlike walking, jumping relies on sparse and temporally localized rewards, requiring precise timing and symmetry across all four legs.
+
+The resulting behavior is demonstrated in Video 2, showing coordinated leg extension, a brief aerial phase, and controlled landing, consistent with the analysis in Section V of the report.
+
 
 
 https://github.com/user-attachments/assets/cc3d4eb4-1ffd-4384-a7e1-0350a0413816
 
 
-
 ## Training Results and Analysis (Weights & Biases)
 
-All metrics below are logged using Weights & Biases during PPO training on NYU Greene. Each curve corresponds to a separate training run with different random seeds or task configurations.
+All metrics below are logged using Weights & Biases during PPO training on NYU Greene.
+Curves correspond to successful training runs for direct locomotion and gait stabilization.
+### Velocity Tracking Performance
 
----
-
-### Mean Episode Length
-![Mean Episode Length](docs/img/train_mean_episode_length.png)
-
-**Interpretation:**  
-The steady increase and saturation near the episode horizon indicates that the policy learns to remain upright and stable for longer durations. Episodes increasingly terminate due to time-out rather than failure, reflecting improved gait stability and balance.
-
----
-
-### Mean Episode Reward
-![Mean Episode Reward](docs/img/train_mean_reward.png)
+![Planar Velocity Tracking](docs/img/track_linear_vel_xy_exp.png)
+![Yaw-Rate Tracking](docs/img/track_ang_vel_z_exp.png)
 
 **Interpretation:**  
-The rising reward curve corresponds to improved velocity tracking, smoother actions, and better gait coordination. Flat or negative curves indicate failed runs that do not discover stable locomotion.
+Planar linear and yaw-rate tracking rewards converge rapidly within early training iterations, indicating fast acquisition of accurate command-following behavior. After convergence, improvements primarily refine gait stability rather than tracking accuracy, consistent with the analysis in Section V-A of the report.
 
----
+### Gait Stability and Contact Quality
 
-### Learning Rate Schedule
-![Learning Rate](docs/img/loss_learning_rate.png)
-
-**Interpretation:**  
-Early learning-rate spikes correspond to exploratory PPO updates. The gradual reduction indicates convergence as policy updates become smaller and more stable.
-
----
-
-### Episode Termination: Time-Out
-![Termination Time-Out](docs/img/episode_termination_timeout.png)
+![Raibert Foot-Placement Penalty](docs/img/rew_raibert_heuristic.png)
+![Stance Contact Reward](docs/img/rew_stance_contact.png)
+![Base Contact Terminations](docs/img/base_contact.png)
 
 **Interpretation:**  
-As training progresses, a larger fraction of episodes terminate due to time-out instead of instability. This confirms successful stabilization of the locomotion policy.
+The Raibert foot-placement penalty stabilizes as coordinated stepping emerges, while stance contact rewards increase with improved foot–ground consistency. Base-contact terminations decay toward zero, indicating successful avoidance of catastrophic failures such as base–ground collisions and confirming robust gait stabilization.
 
----
-
-### Velocity Tracking Reward
-![Velocity Tracking Reward](docs/img/track_lin_vel_xy_exp.png)
-
-**Interpretation:**  
-The rapid rise and plateau demonstrate that the policy quickly learns to track commanded planar velocities accurately and consistently over long horizons.
-
----
-
-### Action Smoothness Reward
-![Action Smoothness Reward](docs/img/action_smoothness.png)
-
-**Interpretation:**  
-The decreasing penalty magnitude over training indicates reduced joint command chatter and smoother actuation, validating the effectiveness of first- and second-order action-rate regularization.
-
----
-
-### Backflip Task: Takeoff Impulse Reward
-![Takeoff Impulse Reward](docs/img/takeoff_impulse.png)
-
-**Interpretation:**  
-For the backflip task, the increasing takeoff impulse reward shows that the policy learns to generate sufficient vertical impulse and coordinated motion required for liftoff.
 
 ---
 
 ## Summary
 
-Together, these plots demonstrate:
-- Stable PPO convergence
-- Improved gait stability and episode survivability
-- Effective velocity tracking
-- Reduced action chattering
-- Successful task-specific learning (e.g., backflip takeoff)
+These results demonstrate:
+- Stable PPO convergence with increasing episode survivability
+- Accurate planar velocity and yaw-rate tracking
+- Improved gait coordination via Raibert-based shaping
+- Reduced joint chatter through action-rate regularization
+- Robust contact timing and failure avoidance
+- Successful extension of the same RL framework to coordinated jumping behavior
 
-These results validate the reward design, actuator modeling, and training pipeline implemented in the repository.
+Together, the figures and videos validate the reward design, actuator modeling, and training pipeline described in the accompanying report.
+
