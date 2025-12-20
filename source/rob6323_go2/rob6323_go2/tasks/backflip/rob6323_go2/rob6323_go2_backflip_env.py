@@ -1,6 +1,6 @@
 
 """
-Backflips!
+Backflips
 """
 
 from __future__ import annotations
@@ -48,55 +48,55 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
     def _get_rewards(self) -> torch.Tensor:
         phase = self._compute_phase()
         
- 
-        current_step = self.common_step_counter
-        curriculum_factor = torch.clamp(
-            torch.tensor(current_step / self.cfg.curriculum_duration_steps), 
-            min=0.0, max=1.0
-        ).to(self.device)
-
-        is_takeoff = phase < self.cfg.takeoff_phase_portion
-        is_airborne = (phase >= self.cfg.airborne_phase_start) & (phase <= self.cfg.airborne_phase_end)
-        is_landing = phase > self.cfg.airborne_phase_end
-        
+    
         root_lin_vel = self.robot.data.root_lin_vel_w
         root_ang_vel = self.robot.data.root_ang_vel_b
         _, current_pitch, _ = math_utils.euler_xyz_from_quat(self.robot.data.root_quat_w)
 
-        vertical_vel = torch.clamp(root_lin_vel[:, 2], min=0.0)
-        takeoff_reward = is_takeoff * vertical_vel * 1.5 
+     
+        is_takeoff = phase < self.cfg.takeoff_phase_portion
+        is_airborne = (phase >= self.cfg.airborne_phase_start) & (phase <= self.cfg.airborne_phase_end)
+        is_landing = phase > self.cfg.airborne_phase_end
+
+      
+        current_vel_z = root_lin_vel[:, 2]
+        vel_error = torch.abs(current_vel_z - self.cfg.target_jump_vel)
+        r_takeoff = is_takeoff * torch.exp(-torch.square(vel_error) / 0.5)
+
         
-        target_spin = self.cfg.target_flip_speed * curriculum_factor
-        current_spin = root_ang_vel[:, 1]
+        pitch_error = torch.abs(self._wrap_to_pi(current_pitch))
         
-        spin_error = torch.abs(current_spin - target_spin)
+        r_pitch_stability = is_airborne * torch.exp(-torch.square(pitch_error) / 0.1)
 
-        rate_reward = is_airborne * torch.exp(-(spin_error**2) / (4.0**2))
+        
+        landing_vel_xy = torch.norm(root_lin_vel[:, :2], dim=-1)
+        landing_vel_z = torch.abs(root_lin_vel[:, 2])
+        
+        r_landing = is_landing * (
+            torch.exp(-torch.square(pitch_error) / 0.2) * 
+            torch.exp(-torch.square(landing_vel_xy) / 0.5) * 
+            torch.exp(-torch.square(landing_vel_z) / 1.0)    
+        )
 
-        landing_pitch_error = torch.abs(self._wrap_to_pi(current_pitch))
-        landing_reward = is_landing * torch.exp(-(landing_pitch_error**2) / 0.5)
+    
+        torques = self.robot.data.applied_torque
+        p_torque = torch.sum(torch.square(torques), dim=1)
 
-        landing_vel_penalty = is_landing * torch.norm(root_lin_vel[:, :2], dim=-1)
-        landing_reward *= torch.exp(-landing_vel_penalty / 1.0)
-
-        action_delta = self._actions - self._previous_actions
-        smoothness_penalty = torch.mean(torch.square(action_delta), dim=1)
+        p_lin_vel_xy = torch.sum(torch.square(root_lin_vel[:, :2]), dim=1) 
+        
+        p_pitch_instability = torch.square(root_ang_vel[:, 1]) 
 
         rewards = {
-            "takeoff_impulse": takeoff_reward * self.cfg.takeoff_vel_reward_scale,
-            "backflip_spin": rate_reward * 3.0, 
-            "landing_stability": landing_reward * self.cfg.landing_reward_scale,
-            "action_smoothness": -smoothness_penalty * self.cfg.action_smoothness_scale,
+            "reward_takeoff": r_takeoff * self.cfg.takeoff_vel_reward_scale,
+            "reward_landing": r_landing * self.cfg.landing_reward_scale,
+            "reward_stability": r_pitch_stability * 1.0, 
+            
+            "penalty_torque": p_torque * self.cfg.penalty_torque_scale,
+            "penalty_lin_vel_xy": p_lin_vel_xy * self.cfg.penalty_lin_vel_xy_scale,
+            "penalty_pitch_instability": p_pitch_instability * self.cfg.penalty_pitch_instability_scale,
         }
 
-        reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
-
-        for key, value in rewards.items():
-             if key not in self._episode_sums:
-                self._episode_sums[key] = torch.zeros_like(value)
-             self._episode_sums[key] += value
-             
-        return reward
+        return torch.sum(torch.stack(list(rewards.values())), dim=0)
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         super()._reset_idx(env_ids)
