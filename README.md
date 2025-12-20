@@ -221,7 +221,7 @@ cd ~/rob6323_go2_project
 
 To improve stability and sim-to-real transfer, the environment augments standard PD joint control with a nonlinear actuator friction model and reset-time domain randomization. Joint torques are computed as
 
-τ = Kₚ (q_d − q) − K_d q̇ − τ_f,
+τ = Kp (qd − q) − Kd q̇ − τf,
 
 with saturation at ±100 Nm, where actuator losses are modeled as
 
