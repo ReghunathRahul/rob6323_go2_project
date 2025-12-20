@@ -274,9 +274,11 @@ Planar linear and yaw-rate tracking rewards converge rapidly within early traini
 
 ### Gait Stability and Contact Quality
 
-![Raibert Foot-Placement Penalty](docs/img/rew_raibert_heuristic.png)
-![Stance Contact Reward](docs/img/rew_stance_contact.png)
-![Base Contact Terminations](docs/img/base_contact.png)
+<p align="center">
+  <img src="docs/img/rew_raibert_heuristic.png" width="420">
+  <img src="docs/img/rew_stance_contact.png" width="420"><br>
+  <img src="docs/img/base_contact.png" width="420">
+</p>
 
 **Interpretation:**  
 The Raibert foot-placement penalty stabilizes as coordinated stepping emerges, while stance contact rewards increase with improved foot–ground consistency. Base-contact terminations decay toward zero, indicating successful avoidance of catastrophic failures such as base–ground collisions and confirming robust gait stabilization.
