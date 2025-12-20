@@ -238,6 +238,10 @@ At every environment reset, actuator parameters are randomized:
 
 Commanded planar velocities and episode start times are also resampled to avoid synchronized rollouts and simulator-specific exploitation. Together, friction modeling and randomization encourage feedback-driven control policies that remain stable across actuator variability rather than overfitting to nominal dynamics.
 
+## Major additions, rationale, and exact reproduction
+
+Actuator friction modeling was added to capture non-ideal joint behavior, including stiction and velocity-dependent damping, which are absent in the default simulator. This improves realism by reducing high-frequency joint chatter and producing smoother stance–swing transitions. The addition increases robustness of the learned policy under actuator uncertainty and improves sim-to-real transfer.
+
 ## Output: Direct Locomotion Task (Friction walk)
 
 The video below illustrates the effect of nonlinear actuator friction modeling and reset-time domain randomization on learned locomotion behavior.
