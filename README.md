@@ -276,8 +276,11 @@ Planar linear and yaw-rate tracking rewards converge rapidly within early traini
 
 <p align="center">
   <img src="docs/img/rew_raibert_heuristic.png" width="420">
-  <img src="docs/img/rew_stance_contact.png" width="420"><br>
-  <img src="docs/img/base_contact.png" width="420">
+  <img src="docs/img/rew_stance_contact.png" width="420">
+</p>
+
+<p align="center">
+    <img src="docs/img/base_contact.png" width="420">
 </p>
 
 **Interpretation:**  
