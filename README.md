@@ -211,13 +211,19 @@ cd ~/rob6323_go2_project
 TASK_NAME=Template-Rob6323-Go2-Direct-v0 ./train.sh --experiment_name go2_flat_direct --logger wandb
 ```
 
+For other tasks
+```bash
+cd ~/rob6323_go2_project
+TASK_NAME=Template-Rob6323-Go2-<Direct|Backflip|RobustLocomotion|Bipedal>-v0 ./train.sh --experiment_name go2_<flat_direct|backflip|robust_localmotion|bipedal> --max_iterations 1000
+```
+
 ## Running tests
 Submit the provided automated checks to Burst:
 ```bash
 cd ~/rob6323_go2_project
 ./tests.sh
 ```
-## Actuator Friction Modeling and Domain Randomization
+## Major additions: Actuator Friction Modeling and Domain Randomization
 
 To improve stability and sim-to-real transfer, the environment augments standard PD joint control with a nonlinear actuator friction model and reset-time domain randomization. Joint torques are computed as
 
@@ -237,10 +243,6 @@ At every environment reset, actuator parameters are randomized:
 - stiction friction: `c_s ∼ U(0, 2.5)`
 
 Commanded planar velocities and episode start times are also resampled to avoid synchronized rollouts and simulator-specific exploitation. Together, friction modeling and randomization encourage feedback-driven control policies that remain stable across actuator variability rather than overfitting to nominal dynamics.
-
-## Major additions, rationale, and exact reproduction
-
-Actuator friction modeling was added to capture non-ideal joint behavior, including stiction and velocity-dependent damping, which are absent in the default simulator. This improves realism by reducing high-frequency joint chatter and producing smoother stance–swing transitions. The addition increases robustness of the learned policy under actuator uncertainty and improves sim-to-real transfer.
 
 ## Output: Direct Locomotion Task (Friction walk)
 
