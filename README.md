@@ -179,7 +179,7 @@ Authors are with New York University - Tandon School of Engineering
 <br> All have contributed equally to this work.
 </sup>
 
-[Code](https://github.com/ReghunathRahul/rob6323_go2_project) | [Paper](#)
+[Code](https://github.com/ReghunathRahul/rob6323_go2_project) | [Paper](https://drive.google.com/file/d/1Uvn8GplQJbIy_DWCRahoHbfEZbiXGmim/view?usp=sharing)
 
 ## Repository layout
 - `source/rob6323_go2/`: Python package that defines the Go2 tasks, environment configuration, actuator models, and PPO hyperparameters.
