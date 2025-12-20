@@ -247,15 +247,13 @@ Specifically, it highlights:
 - Smoother stance-to-swing transitions under randomized actuator parameters
 - Increased robustness to commanded velocity changes compared to friction-free baselines
 
-https://github.com/user-attachments/assets/4353b7ec-4e29-4d57-8a9a-f8f8032b0a8c
+https://github.com/user-attachments/assets/ecd55020-9b3e-4650-af72-71105f8f8c9e
 
 ## Output: Coordinated Jumping (“Happy Dance”) Behavior
 
 In addition to steady locomotion, a separate task variant trains short-duration coordinated vertical motion from a near-stationary stance. Rewards emphasize synchronized leg extension, positive vertical base velocity during takeoff, and safe landing without base–ground contact. Unlike walking, jumping relies on sparse and temporally localized rewards, requiring precise timing and symmetry across all four legs.
 
 The resulting behavior is demonstrated in Video 2, showing coordinated leg extension, a brief aerial phase, and controlled landing, consistent with the analysis in Section V of the report.
-
-
 
 https://github.com/user-attachments/assets/cc3d4eb4-1ffd-4384-a7e1-0350a0413816
 
