@@ -264,10 +264,17 @@ All metrics below are logged using Weights & Biases during PPO training on NYU G
 Curves correspond to successful training runs for direct locomotion and gait stabilization.
 ### Velocity Tracking Performance
 
-<p align="center">
-  <img src="docs/img/track_linear_vel_xy_exp.png" width="420">
-  <img src="docs/img/track_ang_vel_z_exp.png" width="420">
-</p>
+<table align="center">
+  <tr>
+    <td>
+      <img src="docs/img/track_linear_vel_xy_exp.png" width="420">
+    </td>
+    <td>
+      <img src="docs/img/track_ang_vel_z_exp.png" width="420">
+    </td>
+  </tr>
+</table>
+
 
 **Interpretation:**  
 Planar linear and yaw-rate tracking rewards converge rapidly within early training iterations, indicating fast acquisition of accurate command-following behavior. After convergence, improvements primarily refine gait stability rather than tracking accuracy, consistent with the analysis in Section V-A of the report.
