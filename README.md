@@ -264,7 +264,7 @@ All metrics below are logged using Weights & Biases during PPO training on NYU G
 Curves correspond to successful training runs for direct locomotion and gait stabilization.
 ### Velocity Tracking Performance
 
-![Planar Velocity Tracking](docs/img/track_linear_vel_xy_exp.png)
+<img src="docs/img/track_linear_vel_xy_exp.png" width="500"/>
 ![Yaw-Rate Tracking](docs/img/track_ang_vel_z_exp.png)
 
 **Interpretation:**  
