@@ -11,9 +11,14 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
 
     def __init__(self, cfg: Rob6323Go2BackflipEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
-        
+
+        self.global_step = 0 
+
         self.cumulative_pitch = torch.zeros(self.num_envs, device=self.device)
         self.progress_buf = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
+        # bookkeeping
+        self._curriculum_T = float(getattr(self.cfg, "curriculum_duration_steps", 0.0))
         
         self._episode_sums.update({
             "rear_up_hold": torch.zeros(self.num_envs, device=self.device),
@@ -24,6 +29,16 @@ class Rob6323Go2BackflipEnv(Rob6323Go2Env):
             "premature_penalty": torch.zeros(self.num_envs, device=self.device),
             "smoothness": torch.zeros(self.num_envs, device=self.device),
         })
+
+    def _curriculum_alpha(self
+    ) -> float:
+        if self._curriculum_T <= 0.0:
+            return 1.0
+        return float(min(1.0, max(0.0, self.global_step / self._curriculum_T))) 
+
+    def step(self, actions):
+        self.global_step += self.num_envs
+        return super().step(actions)
 
     def _get_observations(self) -> dict:
         obs = super()._get_observations()

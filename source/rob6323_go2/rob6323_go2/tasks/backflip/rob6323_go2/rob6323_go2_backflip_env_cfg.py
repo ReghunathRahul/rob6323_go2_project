@@ -36,3 +36,8 @@ class Rob6323Go2BackflipEnvCfg(Rob6323Go2EnvCfg):
     takeoff_phase_portion = 0.2
     airborne_phase_start = 0.5
     airborne_phase_end = 0.8
+
+    # actually use checkpoints instead
+    pretrained_jump_ckpt: str | None = None
+    pretrained_load_critic: bool = True
+    pretrained_load_optimizer: bool = False
